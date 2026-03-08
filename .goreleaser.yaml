@@ -1,0 +1,42 @@
+project_name: asactl
+builds:
+  - main: ./cmd/asactl
+    binary: asactl
+    env:
+      - CGO_ENABLED=0
+    ldflags:
+      - -s -w -X main.version={{ .Version }} -X main.commit={{ .Commit }} -X main.date={{ .Date }}
+    goos:
+      - darwin
+      - linux
+    goarch:
+      - amd64
+      - arm64
+archives:
+  - format: tar.gz
+    name_template: "{{ .ProjectName }}_{{ .Version }}_{{ .Os }}_{{ .Arch }}"
+checksum:
+  name_template: checksums.txt
+changelog:
+  sort: asc
+  filters:
+    exclude:
+      - "^docs:"
+      - "^test:"
+      - "^chore:"
+brews:
+  - name: asactl
+    repository:
+      owner: robaerd
+      name: homebrew-tap
+      token: "{{ .Env.HOMEBREW_TAP_GITHUB_TOKEN }}"
+    directory: Formula
+    homepage: "https://github.com/robaerd/asactl"
+    description: "CLI for managing Apple Search Ads from YAML desired-state files"
+    license: "MIT"
+    install: |
+      bin.install "asactl"
+    test: |
+      system "#{bin}/asactl", "--version"
+    caveats: |
+      Run `asactl config init` and `asactl config edit` before your first `check-auth`, `plan`, or `apply`.

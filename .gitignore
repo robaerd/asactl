@@ -1,0 +1,9 @@
+/bin/
+/dist/
+/coverage.out
+/.env
+/.cache/
+*.test
+.tmp/
+/demo/
+/docs/
