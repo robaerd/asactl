@@ -23,7 +23,7 @@ If you like Terraform-style workflows, the mental model is similar:
 - re-run safely without drifting into click-ops
 
 ## Install
-
+<!--
 ### Homebrew (recommended)
 
 ```bash
@@ -33,7 +33,7 @@ brew install asactl
 
 ### Binary download
 
-Download from [GitHub Releases](https://github.com/robaerd/asactl/releases) for macOS/Linux (arm64/amd64).
+Download from [GitHub Releases](https://github.com/robaerd/asactl/releases) for macOS/Linux (arm64/amd64).-->
 
 ### From source
 
