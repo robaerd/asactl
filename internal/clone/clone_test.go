@@ -9,7 +9,7 @@ import (
 )
 
 func TestCloneScalesAndRenames(t *testing.T) {
-	loaded, err := spec.LoadFile(filepath.Join("..", "..", "examples", "us.yaml"))
+	loaded, err := spec.LoadFile(filepath.Join("..", "..", "examples", "starter_with_generators.yaml"))
 	if err != nil {
 		t.Fatalf("load spec: %v", err)
 	}
@@ -29,7 +29,7 @@ func TestCloneScalesAndRenames(t *testing.T) {
 }
 
 func TestCloneUsesStableDecimalMultipliers(t *testing.T) {
-	loaded, err := spec.LoadFile(filepath.Join("..", "..", "examples", "us.yaml"))
+	loaded, err := spec.LoadFile(filepath.Join("..", "..", "examples", "starter_with_generators.yaml"))
 	if err != nil {
 		t.Fatalf("load spec: %v", err)
 	}
@@ -46,7 +46,7 @@ func TestCloneUsesStableDecimalMultipliers(t *testing.T) {
 }
 
 func TestCloneRewritesGeneratorCampaignRefs(t *testing.T) {
-	loaded, err := spec.LoadFile(filepath.Join("..", "..", "examples", "us.yaml"))
+	loaded, err := spec.LoadFile(filepath.Join("..", "..", "examples", "starter_with_generators.yaml"))
 	if err != nil {
 		t.Fatalf("load spec: %v", err)
 	}
@@ -57,14 +57,14 @@ func TestCloneRewritesGeneratorCampaignRefs(t *testing.T) {
 	if got := cloned.Generators[0].Spec.TargetRef.Campaign; got != "CA - Discovery" {
 		t.Fatalf("unexpected generator target %q", got)
 	}
-	wantSources := []string{"CA - Brand - Exact", "CA - Category - Exact", "CA - Competitor - Exact"}
+	wantSources := []string{"CA - Brand - Exact", "CA - Category - Exact", "CA - Routine - Exact"}
 	if got := cloned.Generators[0].Spec.SourceRefs.Campaigns; len(got) != len(wantSources) || got[0] != wantSources[0] || got[1] != wantSources[1] || got[2] != wantSources[2] {
 		t.Fatalf("unexpected generator sources %#v", got)
 	}
 }
 
 func TestCloneClearsSourceMetadata(t *testing.T) {
-	loaded, err := spec.LoadFile(filepath.Join("..", "..", "examples", "composed", "asactl.yaml"))
+	loaded, err := spec.LoadFile(filepath.Join("..", "..", "examples", "composed", "manifest.yaml"))
 	if err != nil {
 		t.Fatalf("load composed spec: %v", err)
 	}
@@ -86,7 +86,7 @@ func TestCloneClearsSourceMetadata(t *testing.T) {
 }
 
 func TestCloneRejectsZeroMultipliers(t *testing.T) {
-	loaded, err := spec.LoadFile(filepath.Join("..", "..", "examples", "us.yaml"))
+	loaded, err := spec.LoadFile(filepath.Join("..", "..", "examples", "starter_with_generators.yaml"))
 	if err != nil {
 		t.Fatalf("load spec: %v", err)
 	}

@@ -1,0 +1,6 @@
+version: 1
+kind: Manifest
+base: base.yaml
+campaigns:
+  - campaigns/brand.yaml
+  - campaigns/discovery.yaml

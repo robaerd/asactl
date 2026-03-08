@@ -45,7 +45,7 @@ func TestValidateCommandRuns(t *testing.T) {
 	stderr := &bytes.Buffer{}
 	cmd.SetOut(stdout)
 	cmd.SetErr(stderr)
-	cmd.SetArgs([]string{"validate", "../../examples/us.yaml"})
+	cmd.SetArgs([]string{"validate", "../../examples/starter.yaml"})
 	err := cmd.Execute()
 	if err != nil {
 		t.Fatalf("validate command: %v stderr=%s", err, stderr.String())
@@ -232,7 +232,7 @@ func TestPlanRejectsMutuallyExclusiveRecreateFlags(t *testing.T) {
 	stderr := &bytes.Buffer{}
 	cmd.SetOut(stdout)
 	cmd.SetErr(stderr)
-	cmd.SetArgs([]string{"plan", "../../examples/us.yaml", "--recreate", "--wipe-org"})
+	cmd.SetArgs([]string{"plan", "../../examples/starter.yaml", "--recreate", "--wipe-org"})
 	err := cmd.Execute()
 	if err == nil {
 		t.Fatal("expected mutually exclusive flag error")

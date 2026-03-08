@@ -1,0 +1,28 @@
+version: 1
+kind: Config
+campaign_group:
+  id: "YOUR_CAMPAIGN_GROUP_ID"
+auth:
+  profile: default
+app:
+  name: HabitFlow
+  app_id: "YOUR_APP_ID"
+defaults:
+  currency: USD
+  devices:
+    - IPHONE
+campaigns:
+  - name: US - Brand - Exact
+    storefronts:
+      - US
+    daily_budget: 5.00
+    status: ACTIVE
+    adgroups:
+      - name: Brand Keywords
+        status: ACTIVE
+        default_cpt_bid: 1.20
+        targeting: KEYWORDS
+        keywords:
+          - { text: habitflow,     match_type: EXACT, bid: 1.40, status: ACTIVE }
+          - { text: habit flow,    match_type: EXACT, bid: 1.20, status: ACTIVE }
+          - { text: habitflow app, match_type: EXACT, bid: 1.20, status: ACTIVE }

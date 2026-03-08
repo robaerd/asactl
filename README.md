@@ -95,7 +95,7 @@ campaigns:
           - { text: my app name, match_type: EXACT, bid: 0.60, status: ACTIVE }
 ```
 
-See `examples/` for complete real-world configs, including multi-file composition.
+See `examples/` for small focused starting points, including generators and multi-file composition.
 
 ### 3. Check auth before planning
 
@@ -120,7 +120,7 @@ asactl apply my-ads.yaml --yes     # Apply to Apple Ads
 
 `plan` shows what will be created, updated, paused, activated, or deleted. Review it before you apply.
 
-For a larger starting point, use `examples/us.yaml`. For split configs, see `examples/composed/`.
+Start with `examples/starter.yaml`. For a generator example, see `examples/starter_with_generators.yaml`. For split configs, see `examples/composed/manifest.yaml`.
 
 ## What it's good at
 
@@ -137,7 +137,7 @@ For a larger starting point, use `examples/us.yaml`. For split configs, see `exa
 ### Clone to a new market
 
 ```bash
-asactl clone us.yaml uk.yaml --storefront GB --bid-multiplier 0.8 --budget-multiplier 0.5
+asactl clone campaign-us.yaml campaign-uk.yaml --storefront GB --bid-multiplier 0.8 --budget-multiplier 0.5
 ```
 
 ### Save and replay plans
@@ -145,14 +145,14 @@ asactl clone us.yaml uk.yaml --storefront GB --bid-multiplier 0.8 --budget-multi
 > Inspired by Terraform's plan files, so you can save a plan and always replay it later without worrying about changes in the YAML or remote state.
 
 ```bash
-asactl plan config.yaml --out my-plan.json
-asactl apply my-plan.json --yes
+asactl plan campaign.yaml --out saved-plan.json
+asactl apply saved-plan.json --yes
 ```
 
 ### Dry-run before applying
 
 ```bash
-asactl apply config.yaml --dry-run
+asactl apply campaign.yaml --dry-run
 ```
 
 ## Documentation

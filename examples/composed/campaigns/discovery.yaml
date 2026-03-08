@@ -1,0 +1,20 @@
+version: 1
+kind: Campaigns
+campaigns:
+  - name: US - Discovery
+    storefronts:
+      - US
+    daily_budget: 3.00
+    status: ACTIVE
+    adgroups:
+      - name: Discovery - Broad
+        status: ACTIVE
+        default_cpt_bid: 0.55
+        targeting: KEYWORDS
+        keywords:
+          - { text: habit tracker,  match_type: BROAD, bid: 0.60, status: ACTIVE }
+          - { text: streak tracker, match_type: BROAD, bid: 0.55, status: ACTIVE }
+      - name: Discovery - Search Match
+        status: ACTIVE
+        default_cpt_bid: 0.45
+        targeting: SEARCH_MATCH

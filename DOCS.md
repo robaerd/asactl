@@ -9,7 +9,7 @@
 - [Auth Configuration](#auth-configuration)
 - [Recreate & Wipe Modes](#recreate--wipe-modes)
 - [Multi-File Composition](#multi-file-composition)
-- [Negative Keyword Rules](#negative-keyword-rules)
+- [Generators](#generators)
 - [Safety & Best Practices](#safety--best-practices)
 - [Troubleshooting](#troubleshooting)
 
@@ -82,7 +82,7 @@ asactl apply saved-plan.json --yes
 Clone a config to another storefront with bid and budget scaling.
 
 ```bash
-asactl clone us.yaml uk.yaml --storefront GB --bid-multiplier 0.8 --budget-multiplier 0.5
+asactl clone campaign-us.yaml campaign-uk.yaml --storefront GB --bid-multiplier 0.8 --budget-multiplier 0.5
 ```
 
 - Accepts a standalone config or a manifest; always writes a standalone config.
@@ -231,13 +231,13 @@ Deletes every remote campaign visible in the configured `campaign_group.id`, the
 If one YAML file gets too big, split it into a base file and separate campaign files with a manifest:
 
 ```yaml
-# asactl.yaml (Manifest)
+# manifest.yaml (Manifest)
 version: 1
 kind: Manifest
 base: base.yaml
 campaigns:
-  - campaigns/us.yaml
-  - campaigns/uk.yaml
+  - campaigns/brand.yaml
+  - campaigns/discovery.yaml
 ```
 
 The base file (`kind: Base`) holds shared config: `campaign_group`, `auth`, `app`, `defaults`, `product_pages`.
@@ -245,7 +245,7 @@ The base file (`kind: Base`) holds shared config: `campaign_group`, `auth`, `app
 Each campaigns file (`kind: Campaigns`) holds: `generators`, `campaigns`.
 
 One manifest still resolves to one effective desired state for a single `campaign_group.id + app.app_id` scope.
-See `examples/composed/` for a working example.
+See `examples/composed/manifest.yaml` for a working example.
 
 ## Generators
 
@@ -273,6 +273,8 @@ generators:
 ```
 
 This creates exact campaign negatives in the target campaign for every exact keyword found in the source campaigns, so discovery campaigns do not bid on terms you already target elsewhere.
+
+For a small working example, see `examples/starter_with_generators.yaml`.
 
 ## Safety & Best Practices
 

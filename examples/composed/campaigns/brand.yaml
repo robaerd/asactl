@@ -1,0 +1,17 @@
+version: 1
+kind: Campaigns
+campaigns:
+  - name: US - Brand - Exact
+    storefronts:
+      - US
+    daily_budget: 1.50
+    status: ACTIVE
+    adgroups:
+      - name: Brand
+        status: ACTIVE
+        default_cpt_bid: 0.90
+        targeting: KEYWORDS
+        keywords:
+          - { text: habitflow,     match_type: EXACT, bid: 1.10, status: ACTIVE }
+          - { text: habit flow,    match_type: EXACT, bid: 0.90, status: ACTIVE }
+          - { text: habitflow app, match_type: EXACT, bid: 0.90, status: ACTIVE }

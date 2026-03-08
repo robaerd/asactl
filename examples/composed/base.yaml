@@ -1,0 +1,13 @@
+version: 1
+kind: Base
+campaign_group:
+  id: "YOUR_CAMPAIGN_GROUP_ID"
+auth:
+  profile: default
+app:
+  name: HabitFlow
+  app_id: "YOUR_APP_ID"
+defaults:
+  currency: USD
+  devices:
+    - IPHONE
