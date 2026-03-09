@@ -1,6 +1,8 @@
+version: 2
 project_name: asactl
 builds:
-  - main: ./cmd/asactl
+  - id: darwin
+    main: ./cmd/asactl
     binary: asactl
     env:
       - CGO_ENABLED=0
@@ -8,12 +10,33 @@ builds:
       - -s -w -X main.version={{ .Version }} -X main.commit={{ .Commit }} -X main.date={{ .Date }}
     goos:
       - darwin
+    goarch:
+      - amd64
+      - arm64
+  - id: linux
+    main: ./cmd/asactl
+    binary: asactl
+    env:
+      - CGO_ENABLED=0
+    ldflags:
+      - -s -w -X main.version={{ .Version }} -X main.commit={{ .Commit }} -X main.date={{ .Date }}
+    goos:
       - linux
     goarch:
       - amd64
       - arm64
 archives:
-  - format: tar.gz
+  - id: darwin
+    ids:
+      - darwin
+    formats:
+      - tar.gz
+    name_template: "{{ .ProjectName }}_{{ .Version }}_{{ .Os }}_{{ .Arch }}"
+  - id: linux
+    ids:
+      - linux
+    formats:
+      - tar.gz
     name_template: "{{ .ProjectName }}_{{ .Version }}_{{ .Os }}_{{ .Arch }}"
 checksum:
   name_template: checksums.txt
@@ -24,19 +47,34 @@ changelog:
       - "^docs:"
       - "^test:"
       - "^chore:"
-brews:
+notarize:
+  macos:
+    - ids:
+        - darwin
+      enabled: '{{ and (isEnvSet "MACOS_SIGN_P12") (isEnvSet "MACOS_SIGN_PASSWORD") (isEnvSet "MACOS_NOTARY_KEY") (isEnvSet "MACOS_NOTARY_KEY_ID") (isEnvSet "MACOS_NOTARY_ISSUER_ID") }}'
+      sign:
+        certificate: "{{ .Env.MACOS_SIGN_P12 }}"
+        password: "{{ .Env.MACOS_SIGN_PASSWORD }}"
+      notarize:
+        issuer_id: "{{ .Env.MACOS_NOTARY_ISSUER_ID }}"
+        key_id: "{{ .Env.MACOS_NOTARY_KEY_ID }}"
+        key: "{{ .Env.MACOS_NOTARY_KEY }}"
+        wait: true
+        timeout: 20m
+homebrew_casks:
   - name: asactl
+    ids:
+      - darwin
+    binaries:
+      - asactl
     repository:
       owner: robaerd
       name: homebrew-tap
+      branch: main
       token: "{{ .Env.HOMEBREW_TAP_GITHUB_TOKEN }}"
-    directory: Formula
+    directory: Casks
+    commit_msg_template: "Brew cask update for {{ .ProjectName }} version {{ .Tag }}"
     homepage: "https://github.com/robaerd/asactl"
     description: "CLI for managing Apple Search Ads from YAML desired-state files"
-    license: "MIT"
-    install: |
-      bin.install "asactl"
-    test: |
-      system "#{bin}/asactl", "--version"
     caveats: |
       Run `asactl config init` and `asactl config edit` before your first `check-auth`, `plan`, or `apply`.
