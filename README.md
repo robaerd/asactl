@@ -9,12 +9,11 @@ Manage Apple Search Ads like code. Define campaigns in YAML, preview a safe diff
 
 Right now, `asactl` only manages Search Results campaigns.
 
-<!-- TODO: place demo gif here -->
-<!-- ![asactl demo](docs/demo.gif) -->
+![asactl demo](docs/demo.gif)
 
 ## What is asactl?
 
-`asactl` is a CLI for teams who already run Apple Search Ads and want safer, more repeatable changes. It compares your YAML desired state to live Apple Ads state, shows the exact diff, and applies only what changed.
+`asactl` is a CLI for teams who run Apple Search Ads and want safer, more repeatable changes. It compares your YAML desired state to live Apple Ads state, shows the exact diff, and applies only what changed.
 
 If you like Terraform-style workflows, the mental model is similar:
 
@@ -121,23 +120,7 @@ asactl apply my-ads.yaml --yes     # Apply to Apple Ads
 
 Start with `examples/starter.yaml`. For a generator example, see `examples/starter_with_generators.yaml`. For split configs, see `examples/composed/manifest.yaml`.
 
-## What it's good at
-
-- seeing the exact diff before you touch live campaigns
-- keeping campaigns, bids, targeting, and product-page mappings in Git
-- making repeatable changes without drifting back into UI edits
-- splitting larger setups into base files and campaign files
-- cloning campaigns into new markets without copying everything by hand
-- generating negative keywords from explicit generators
-- keeping bulky YAML readable with `asactl fmt`
-
 ## Common Workflows
-
-### Clone to a new market
-
-```bash
-asactl clone campaign-us.yaml campaign-uk.yaml --storefront GB --bid-multiplier 0.8 --budget-multiplier 0.5
-```
 
 ### Save and replay plans
 
@@ -154,6 +137,12 @@ asactl apply saved-plan.json --yes
 asactl apply campaign.yaml --dry-run
 ```
 
+### Clone to a new market
+
+```bash
+asactl clone campaign-us.yaml campaign-uk.yaml --storefront GB --bid-multiplier 0.8 --budget-multiplier 0.5
+```
+
 ## Documentation
 
 If you want the full reference, see **[DOCS.md](DOCS.md)** for:
@@ -161,7 +150,7 @@ If you want the full reference, see **[DOCS.md](DOCS.md)** for:
 - YAML schema
 - auth setup
 - command reference
-- sync behavior
+- generator configuration
 - recreate and wipe modes
 
 ## License

@@ -6,4 +6,5 @@
 *.test
 .tmp/
 /demo/
-/docs/
+/docs/*
+!/docs/demo.gif
