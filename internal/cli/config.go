@@ -472,12 +472,11 @@ func looksLikeExecutablePath(value string) bool {
 
 func usesShellInterpreter(command string, args []string) bool {
 	if commandNameKey(command) == "env" {
-		wrapped, wrappedArgs, ok := resolveEnvWrappedCommand(args)
+		wrapped, _, ok := resolveEnvWrappedCommand(args)
 		if !ok {
 			return false
 		}
 		command = wrapped
-		args = wrappedArgs
 	}
 
 	switch commandNameKey(command) {

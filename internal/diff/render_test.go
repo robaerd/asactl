@@ -27,6 +27,9 @@ func TestRenderTextIncludesSummaryAndChanges(t *testing.T) {
 	if !strings.Contains(rendered, "Summary: delete=0 create=0 update=1 pause=0 activate=0 noop=0 total=1") {
 		t.Fatalf("expected summary line, got:\n%s", rendered)
 	}
+	if firstLine := strings.SplitN(rendered, "\n", 2)[0]; firstLine != "Summary: delete=0 create=0 update=1 pause=0 activate=0 noop=0 total=1" {
+		t.Fatalf("expected summary on first line, got %q in:\n%s", firstLine, rendered)
+	}
 	if !strings.Contains(rendered, `Campaign: US - Brand - Exact`) {
 		t.Fatalf("expected campaign section, got:\n%s", rendered)
 	}
