@@ -2,6 +2,7 @@
 [![License](https://img.shields.io/github/license/robaerd/asactl)](LICENSE)
 [![Release](https://img.shields.io/github/v/release/robaerd/asactl)](https://github.com/robaerd/asactl/releases)
 [![CI](https://img.shields.io/github/actions/workflow/status/robaerd/asactl/ci.yml?branch=main)](https://github.com/robaerd/asactl/actions)
+[![Go Report Card](https://goreportcard.com/badge/github.com/robaerd/asactl)](https://goreportcard.com/report/github.com/robaerd/asactl)
 
 # asactl
 
