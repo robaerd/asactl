@@ -124,12 +124,12 @@ func NewFile(defaultProfile string) File {
 	}
 }
 
-func StarterProfileFromEnv() Profile {
+func StarterProfile() Profile {
 	return Profile{
-		ClientID:       strings.TrimSpace(os.Getenv("APPLE_ADS_CLIENT_ID")),
-		TeamID:         strings.TrimSpace(os.Getenv("APPLE_ADS_TEAM_ID")),
-		KeyID:          strings.TrimSpace(os.Getenv("APPLE_ADS_KEY_ID")),
-		PrivateKeyPath: strings.TrimSpace(os.Getenv("APPLE_ADS_PRIVATE_KEY_PATH")),
+		ClientID:       "YOUR_APPLE_ADS_CLIENT_ID",
+		TeamID:         "YOUR_APPLE_ADS_TEAM_ID",
+		KeyID:          "YOUR_APPLE_ADS_KEY_ID",
+		PrivateKeyPath: "/absolute/path/to/appleads-private-key.pem",
 	}
 }
 

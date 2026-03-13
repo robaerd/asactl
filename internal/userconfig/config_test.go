@@ -47,6 +47,27 @@ func TestResolvePathUsesOverride(t *testing.T) {
 	}
 }
 
+func TestStarterProfileUsesDocumentedPlaceholders(t *testing.T) {
+	t.Setenv("APPLE_ADS_CLIENT_ID", "client-id")
+	t.Setenv("APPLE_ADS_TEAM_ID", "team-id")
+	t.Setenv("APPLE_ADS_KEY_ID", "key-id")
+	t.Setenv("APPLE_ADS_PRIVATE_KEY_PATH", "/tmp/private.pem")
+
+	profile := userconfig.StarterProfile()
+	if profile.ClientID != "YOUR_APPLE_ADS_CLIENT_ID" {
+		t.Fatalf("unexpected client_id %q", profile.ClientID)
+	}
+	if profile.TeamID != "YOUR_APPLE_ADS_TEAM_ID" {
+		t.Fatalf("unexpected team_id %q", profile.TeamID)
+	}
+	if profile.KeyID != "YOUR_APPLE_ADS_KEY_ID" {
+		t.Fatalf("unexpected key_id %q", profile.KeyID)
+	}
+	if profile.PrivateKeyPath != "/absolute/path/to/appleads-private-key.pem" {
+		t.Fatalf("unexpected private_key_path %q", profile.PrivateKeyPath)
+	}
+}
+
 func TestResolveRuntimeUsesProfileCredentials(t *testing.T) {
 	configPath := filepath.Join(t.TempDir(), "config.toml")
 	t.Setenv(userconfig.OverrideEnvVar, configPath)

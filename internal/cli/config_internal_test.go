@@ -42,7 +42,7 @@ func TestConfigPathPrintsResolvedPath(t *testing.T) {
 	}
 }
 
-func TestConfigInitWritesStarterProfile(t *testing.T) {
+func TestConfigInitWritesStarterPlaceholders(t *testing.T) {
 	override := filepath.Join(t.TempDir(), "config.toml")
 	t.Setenv(userconfig.OverrideEnvVar, override)
 	t.Setenv("APPLE_ADS_CLIENT_ID", "client-id")
@@ -66,8 +66,54 @@ func TestConfigInitWritesStarterProfile(t *testing.T) {
 	if !strings.Contains(text, "default_profile = 'default'") && !strings.Contains(text, "default_profile = \"default\"") {
 		t.Fatalf("expected default profile in config, got %s", text)
 	}
-	if !strings.Contains(text, "client_id = \"client-id\"") && !strings.Contains(text, "client_id = 'client-id'") {
-		t.Fatalf("expected client_id in config, got %s", text)
+	if !strings.Contains(text, `client_id = "YOUR_APPLE_ADS_CLIENT_ID"`) && !strings.Contains(text, `client_id = 'YOUR_APPLE_ADS_CLIENT_ID'`) {
+		t.Fatalf("expected placeholder client_id in config, got %s", text)
+	}
+	if !strings.Contains(text, `team_id = "YOUR_APPLE_ADS_TEAM_ID"`) && !strings.Contains(text, `team_id = 'YOUR_APPLE_ADS_TEAM_ID'`) {
+		t.Fatalf("expected placeholder team_id in config, got %s", text)
+	}
+	if !strings.Contains(text, `key_id = "YOUR_APPLE_ADS_KEY_ID"`) && !strings.Contains(text, `key_id = 'YOUR_APPLE_ADS_KEY_ID'`) {
+		t.Fatalf("expected placeholder key_id in config, got %s", text)
+	}
+	if !strings.Contains(text, `private_key_path = "/absolute/path/to/appleads-private-key.pem"`) && !strings.Contains(text, `private_key_path = '/absolute/path/to/appleads-private-key.pem'`) {
+		t.Fatalf("expected placeholder private_key_path in config, got %s", text)
+	}
+}
+
+func TestConfigInitForceOverwritesProfileWithStarterPlaceholders(t *testing.T) {
+	override := filepath.Join(t.TempDir(), "config.toml")
+	t.Setenv(userconfig.OverrideEnvVar, override)
+	if err := os.WriteFile(override, []byte(`
+version = 1
+default_profile = "default"
+
+[profiles.default]
+client_id = "live-client-id"
+team_id = "live-team-id"
+key_id = "live-key-id"
+private_key_path = "/tmp/live.pem"
+`), 0o600); err != nil {
+		t.Fatalf("write config: %v", err)
+	}
+
+	root := &rootOptions{}
+	cmd := newConfigInitCommand(root)
+	cmd.SetOut(&bytes.Buffer{})
+	cmd.SetErr(ioDiscard)
+	cmd.SetArgs([]string{"--profile", "default", "--force"})
+	if err := cmd.Execute(); err != nil {
+		t.Fatalf("config init --force: %v", err)
+	}
+	content, err := os.ReadFile(override)
+	if err != nil {
+		t.Fatalf("read config: %v", err)
+	}
+	text := string(content)
+	if !strings.Contains(text, `client_id = "YOUR_APPLE_ADS_CLIENT_ID"`) && !strings.Contains(text, `client_id = 'YOUR_APPLE_ADS_CLIENT_ID'`) {
+		t.Fatalf("expected placeholder client_id after force init, got %s", text)
+	}
+	if strings.Contains(text, "live-client-id") {
+		t.Fatalf("expected existing client_id to be overwritten, got %s", text)
 	}
 }
 
@@ -121,6 +167,61 @@ func TestConfigEditUsesInjectedEditor(t *testing.T) {
 	}
 	if editor.path != override {
 		t.Fatalf("expected editor to open %q, got %q", override, editor.path)
+	}
+	content, err := os.ReadFile(override)
+	if err != nil {
+		t.Fatalf("read config: %v", err)
+	}
+	text := string(content)
+	if !strings.Contains(text, `client_id = "YOUR_APPLE_ADS_CLIENT_ID"`) && !strings.Contains(text, `client_id = 'YOUR_APPLE_ADS_CLIENT_ID'`) {
+		t.Fatalf("expected placeholder client_id in created config, got %s", text)
+	}
+}
+
+func TestConfigEditDoesNotAcceptForceFlag(t *testing.T) {
+	override := filepath.Join(t.TempDir(), "config.toml")
+	t.Setenv(userconfig.OverrideEnvVar, override)
+	root := &rootOptions{Editor: &fakeEditor{}}
+	cmd := newConfigEditCommand(root)
+	cmd.SetOut(&bytes.Buffer{})
+	cmd.SetErr(ioDiscard)
+	cmd.SetArgs([]string{"--force"})
+	err := cmd.Execute()
+	if err == nil || !strings.Contains(err.Error(), "unknown flag: --force") {
+		t.Fatalf("expected unknown flag error, got %v", err)
+	}
+}
+
+func TestConfigEditDoesNotMutateExistingProfileBeforeOpening(t *testing.T) {
+	override := filepath.Join(t.TempDir(), "config.toml")
+	t.Setenv(userconfig.OverrideEnvVar, override)
+	if err := os.WriteFile(override, []byte(`
+version = 1
+default_profile = "default"
+
+[profiles.default]
+client_id = "live-client-id"
+team_id = "live-team-id"
+key_id = "live-key-id"
+private_key_path = "/tmp/live.pem"
+`), 0o600); err != nil {
+		t.Fatalf("write config: %v", err)
+	}
+	editor := &fakeEditor{}
+	root := &rootOptions{Editor: editor}
+	cmd := newConfigEditCommand(root)
+	cmd.SetOut(&bytes.Buffer{})
+	cmd.SetErr(ioDiscard)
+	if err := cmd.Execute(); err != nil {
+		t.Fatalf("config edit: %v", err)
+	}
+	content, err := os.ReadFile(override)
+	if err != nil {
+		t.Fatalf("read config: %v", err)
+	}
+	text := string(content)
+	if !strings.Contains(text, `client_id = "live-client-id"`) {
+		t.Fatalf("expected existing profile to remain unchanged, got %s", text)
 	}
 }
 
@@ -303,6 +404,9 @@ func TestMaybeBootstrapRuntimeConfigCreatesStarterFileAndOpensEditor(t *testing.
 	text := string(content)
 	if !strings.Contains(text, "default_profile = \"default\"") && !strings.Contains(text, "default_profile = 'default'") {
 		t.Fatalf("expected default profile in config, got %s", text)
+	}
+	if !strings.Contains(text, `client_id = "YOUR_APPLE_ADS_CLIENT_ID"`) && !strings.Contains(text, `client_id = 'YOUR_APPLE_ADS_CLIENT_ID'`) {
+		t.Fatalf("expected placeholder client_id in bootstrap config, got %s", text)
 	}
 }
 

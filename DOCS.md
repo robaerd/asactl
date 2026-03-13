@@ -104,7 +104,7 @@ Manage the global user config at `~/.asactl/config.toml`.
 ```bash
 asactl config path              # Print config file location
 asactl config init              # Create starter config
-asactl config init --profile default
+asactl config init --force      # Reset a profile to starter placeholders
 asactl config edit              # Open in editor
 asactl config show --json       # Dump current config
 ```
@@ -172,6 +172,8 @@ asactl config init
 asactl config edit
 ```
 
+`config init` creates a starter config with placeholders for the required Apple Ads API credentials. Fill those in with your actual credentials before trying to plan or apply.
+
 ### Profile-based auth (recommended)
 
 The global config uses named profiles like this:
@@ -208,7 +210,7 @@ openssl ecparam -genkey -name prime256v1 -noout -out appleads-private-key.pem
 openssl ec -in appleads-private-key.pem -pubout -out appleads-public-key.pem
 ```
 
-Upload `appleads-public-key.pem` in Apple Ads, then point `private_key_path` of the config (`asactl config edit`) at the matching private key file.
+Upload `appleads-public-key.pem` in Apple Ads, then point `private_key_path` of the config at the matching private key file.
 
 ## Recreate & Wipe Modes
 

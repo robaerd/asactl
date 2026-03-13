@@ -61,7 +61,7 @@ func newConfigInitCommand(root *rootOptions) *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "init",
 		Short: "Create or update the global user config.",
-		Long:  "Create the global TOML user config and seed a profile from the current environment when available. Existing profiles are preserved unless --force overwrites the selected profile.",
+		Long:  "Create the global TOML user config and write starter placeholder auth fields for the selected profile. Existing profiles are preserved unless --force overwrites the selected profile.",
 		RunE: func(cmd *cobra.Command, args []string) error {
 			logger := logging.Component(logging.New(cmd.ErrOrStderr(), logging.Options{JSON: root.JSONOutput, Verbose: root.Verbose}), "cli")
 			selectedProfile := strings.TrimSpace(profile)
@@ -83,7 +83,7 @@ func newConfigInitCommand(root *rootOptions) *cobra.Command {
 				err := fmt.Errorf("profile %q already exists in %s; use --force to overwrite it", selectedProfile, loaded.Path)
 				return render(root, cmd.OutOrStdout(), cmd.ErrOrStderr(), map[string]any{"ok": false, "error": err.Error()}, err)
 			}
-			file.Profiles[selectedProfile] = userconfig.StarterProfileFromEnv()
+			file.Profiles[selectedProfile] = userconfig.StarterProfile()
 			if err := userconfig.SavePath(loaded.Path, file); err != nil {
 				return render(root, cmd.OutOrStdout(), cmd.ErrOrStderr(), map[string]any{"ok": false, "error": err.Error()}, err)
 			}
@@ -102,11 +102,10 @@ func newConfigInitCommand(root *rootOptions) *cobra.Command {
 
 func newConfigEditCommand(root *rootOptions) *cobra.Command {
 	var profile string
-	var force bool
 	cmd := &cobra.Command{
 		Use:   "edit",
 		Short: "Open the global user config in an editor.",
-		Long:  "Open the global TOML user config using $VISUAL or $EDITOR. Editor commands are executed directly without a shell, so direct executable paths and normal args are supported, but shell launchers are rejected. If neither editor variable is configured and the terminal is interactive, asactl falls back to nvim, vim, then vi. If the config file does not exist yet, a starter config is initialized first.",
+		Long:  "Open the global TOML user config using $VISUAL or $EDITOR. Editor commands are executed directly without a shell, so direct executable paths and normal args are supported, but shell launchers are rejected. If neither editor variable is configured and the terminal is interactive, asactl falls back to nvim, vim, then vi. If the config file does not exist yet, a starter config with placeholder auth fields is initialized first.",
 		RunE: func(cmd *cobra.Command, args []string) error {
 			selectedProfile := strings.TrimSpace(profile)
 			if selectedProfile == "" {
@@ -118,13 +117,7 @@ func newConfigEditCommand(root *rootOptions) *cobra.Command {
 			}
 			if !loaded.Exists {
 				file := userconfig.NewFile(selectedProfile)
-				file.Profiles[selectedProfile] = userconfig.StarterProfileFromEnv()
-				if err := userconfig.SavePath(loaded.Path, file); err != nil {
-					return render(root, cmd.OutOrStdout(), cmd.ErrOrStderr(), map[string]any{"ok": false, "error": err.Error()}, err)
-				}
-			} else if force {
-				file := loaded.File
-				file.Profiles[selectedProfile] = userconfig.StarterProfileFromEnv()
+				file.Profiles[selectedProfile] = userconfig.StarterProfile()
 				if err := userconfig.SavePath(loaded.Path, file); err != nil {
 					return render(root, cmd.OutOrStdout(), cmd.ErrOrStderr(), map[string]any{"ok": false, "error": err.Error()}, err)
 				}
@@ -139,7 +132,6 @@ func newConfigEditCommand(root *rootOptions) *cobra.Command {
 		},
 	}
 	cmd.Flags().StringVar(&profile, "profile", "default", "profile name to initialize when the config file is missing")
-	cmd.Flags().BoolVar(&force, "force", false, "overwrite the selected profile from the current environment before opening")
 	return cmd
 }
 
@@ -274,7 +266,7 @@ func maybeBootstrapRuntimeConfig(ctx context.Context, editor configEditor, input
 
 	if !loaded.Exists {
 		file := userconfig.NewFile(selectedProfile)
-		file.Profiles[selectedProfile] = userconfig.StarterProfileFromEnv()
+		file.Profiles[selectedProfile] = userconfig.StarterProfile()
 		if err := userconfig.SavePath(loaded.Path, file); err != nil {
 			return err
 		}
