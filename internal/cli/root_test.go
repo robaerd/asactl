@@ -98,6 +98,99 @@ func TestCheckAuthCommandRuns(t *testing.T) {
 	}
 }
 
+func TestRequiredArgsAreRenderedForYAMLCommands(t *testing.T) {
+	testCases := []struct {
+		name       string
+		args       []string
+		expectErr  string
+		expectHint string
+	}{
+		{name: "check-auth", args: []string{"check-auth"}, expectErr: "missing required argument: <config.yaml>", expectHint: "Run 'asactl check-auth --help' for usage."},
+		{name: "validate", args: []string{"validate"}, expectErr: "missing required argument: <config.yaml>", expectHint: "Run 'asactl validate --help' for usage."},
+		{name: "plan", args: []string{"plan"}, expectErr: "missing required argument: <config.yaml>", expectHint: "Run 'asactl plan --help' for usage."},
+		{name: "apply", args: []string{"apply"}, expectErr: "missing required argument: <config.yaml|planfile>", expectHint: "Run 'asactl apply --help' for usage."},
+		{name: "fmt", args: []string{"fmt"}, expectErr: "missing required argument: <config.yaml>", expectHint: "Run 'asactl fmt --help' for usage."},
+		{name: "clone missing src", args: []string{"clone"}, expectErr: "missing required argument: <src.yaml>", expectHint: "Run 'asactl clone --help' for usage."},
+		{name: "clone missing dst", args: []string{"clone", "src.yaml"}, expectErr: "missing required argument: <dst.yaml>", expectHint: "Run 'asactl clone --help' for usage."},
+	}
+
+	for _, testCase := range testCases {
+		t.Run(testCase.name, func(t *testing.T) {
+			cmd := cli.NewRootCommand("test-version")
+			stdout := &bytes.Buffer{}
+			stderr := &bytes.Buffer{}
+			cmd.SetOut(stdout)
+			cmd.SetErr(stderr)
+			cmd.SetArgs(testCase.args)
+
+			err := cmd.Execute()
+			if err == nil {
+				t.Fatal("expected missing-argument error")
+			}
+			if !strings.Contains(err.Error(), testCase.expectErr) {
+				t.Fatalf("expected error containing %q, got %v", testCase.expectErr, err)
+			}
+			if stdout.Len() != 0 {
+				t.Fatalf("expected empty stdout, got %q", stdout.String())
+			}
+			if !strings.Contains(stderr.String(), testCase.expectErr) {
+				t.Fatalf("expected stderr to contain %q, got %q", testCase.expectErr, stderr.String())
+			}
+			if !strings.Contains(stderr.String(), testCase.expectHint) {
+				t.Fatalf("expected stderr to contain help hint %q, got %q", testCase.expectHint, stderr.String())
+			}
+		})
+	}
+}
+
+func TestEarlyValidationJSONOutputsOnlyJSON(t *testing.T) {
+	testCases := []struct {
+		name      string
+		args      []string
+		expectErr string
+	}{
+		{name: "missing arg", args: []string{"--json", "plan"}, expectErr: "missing required argument: <config.yaml>"},
+		{name: "unknown flag", args: []string{"--json", "plan", "--bogus"}, expectErr: "unknown flag: --bogus"},
+	}
+
+	for _, testCase := range testCases {
+		t.Run(testCase.name, func(t *testing.T) {
+			cmd := cli.NewRootCommand("test-version")
+			stdout := &bytes.Buffer{}
+			stderr := &bytes.Buffer{}
+			cmd.SetOut(stdout)
+			cmd.SetErr(stderr)
+			cmd.SetArgs(testCase.args)
+
+			err := cmd.Execute()
+			if err == nil {
+				t.Fatal("expected validation error")
+			}
+			if !strings.Contains(err.Error(), testCase.expectErr) {
+				t.Fatalf("expected error containing %q, got %v", testCase.expectErr, err)
+			}
+			if stderr.Len() != 0 {
+				t.Fatalf("expected empty stderr, got %q", stderr.String())
+			}
+
+			var payload map[string]any
+			decoder := json.NewDecoder(bytes.NewReader(stdout.Bytes()))
+			if err := decoder.Decode(&payload); err != nil {
+				t.Fatalf("decode json output: %v output=%s", err, stdout.String())
+			}
+			if err := decoder.Decode(&map[string]any{}); err != io.EOF {
+				t.Fatalf("expected a single JSON document, got extra output: %s", stdout.String())
+			}
+			if payload["ok"] != false {
+				t.Fatalf("expected ok=false, got %v", payload["ok"])
+			}
+			if payload["error"] != testCase.expectErr {
+				t.Fatalf("expected error=%q, got %v", testCase.expectErr, payload["error"])
+			}
+		})
+	}
+}
+
 func TestCheckAuthJSONOutputsExpectedFields(t *testing.T) {
 	tokenServer := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		_ = json.NewEncoder(w).Encode(map[string]any{"access_token": "token", "expires_in": 3600})

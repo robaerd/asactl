@@ -60,6 +60,9 @@ func NewRootCommandWithDeps(version string, dependencies RootDependencies) *cobr
 		SilenceUsage:  true,
 		SilenceErrors: true,
 	}
+	cmd.SetFlagErrorFunc(func(command *cobra.Command, err error) error {
+		return renderInputError(options, command, err)
+	})
 	cmd.PersistentFlags().BoolVar(&options.JSONOutput, "json", false, "emit command output as JSON")
 	cmd.PersistentFlags().BoolVar(&options.Verbose, "verbose", false, "enable verbose logs")
 	cmd.AddCommand(newConfigCommand(options))
@@ -84,7 +87,7 @@ func newCheckAuthCommand(root *rootOptions) *cobra.Command {
 	var profile string
 	cmd := &cobra.Command{
 		Use:   "check-auth <config.yaml>",
-		Args:  cobra.ExactArgs(1),
+		Args:  requiredArgs(root, "<config.yaml>"),
 		Short: "Verify Apple Ads auth, organization access, app scope, and product pages.",
 		Long:  "Resolve auth configuration from the YAML spec, perform Apple Ads OAuth, confirm access to the configured organization, fetch product pages for the configured app, and summarize the currently managed campaign scope without mutating anything.",
 		RunE: func(cmd *cobra.Command, args []string) error {
@@ -160,7 +163,7 @@ func newValidateCommand(root *rootOptions) *cobra.Command {
 	var rootDir string
 	cmd := &cobra.Command{
 		Use:   "validate <config.yaml>",
-		Args:  cobra.ExactArgs(1),
+		Args:  requiredArgs(root, "<config.yaml>"),
 		Short: "Validate YAML schema and business rules.",
 		Long:  "Validate the YAML desired state with strict schema decoding and Apple Ads business rules, including keyword uniqueness, targeting constraints, product-page references, and scale limits.",
 		RunE: func(cmd *cobra.Command, args []string) error {
@@ -204,7 +207,7 @@ func newPlanCommand(root *rootOptions) *cobra.Command {
 	var outPath string
 	cmd := &cobra.Command{
 		Use:   "plan <config.yaml>",
-		Args:  cobra.ExactArgs(1),
+		Args:  requiredArgs(root, "<config.yaml>"),
 		Short: "Fetch remote state and print a plan diff.",
 		Long:  "Fetch live Apple Ads state for the configured campaign group and app scope, then compare it to the YAML desired state. By default, stale managed resources are hard-deleted; use --recreate or --wipe-org for broader rebuild modes. Use --out to save an explicit plan artifact that apply can replay without re-planning.",
 		RunE: func(cmd *cobra.Command, args []string) error {
@@ -277,7 +280,7 @@ func newApplyCommand(root *rootOptions) *cobra.Command {
 	var profile string
 	cmd := &cobra.Command{
 		Use:   "apply <config.yaml|planfile>",
-		Args:  cobra.ExactArgs(1),
+		Args:  requiredArgs(root, "<config.yaml|planfile>"),
 		Short: "Apply the diff to Apple Ads.",
 		Long:  "Apply Apple Ads changes either from a fresh YAML desired state or from an explicit saved plan file produced by plan --out. Saved plan replay does not re-plan or refresh remote state, and it rejects scope/profile/root overrides.",
 		RunE: func(cmd *cobra.Command, args []string) error {
@@ -399,7 +402,7 @@ func newCloneCommand(root *rootOptions) *cobra.Command {
 	var rootDir string
 	cmd := &cobra.Command{
 		Use:   "clone <src.yaml> <dst.yaml>",
-		Args:  cobra.ExactArgs(2),
+		Args:  requiredArgs(root, "<src.yaml>", "<dst.yaml>"),
 		Short: "Clone a market YAML into a new storefront.",
 		Long:  "Clone a YAML market config into a new storefront while scaling bids and budgets. This is intended for rolling the same structure into adjacent markets such as UK, CA, or AU.",
 		RunE: func(cmd *cobra.Command, args []string) error {
@@ -445,7 +448,7 @@ func newFmtCommand(root *rootOptions) *cobra.Command {
 	var rootDir string
 	cmd := &cobra.Command{
 		Use:   "fmt <config.yaml>",
-		Args:  cobra.ExactArgs(1),
+		Args:  requiredArgs(root, "<config.yaml>"),
 		Short: "Format YAML canonically.",
 		Long:  "Render the YAML desired state in canonical formatting with stable field ordering. Use -w to rewrite the source file in place; otherwise the formatted YAML is written to stdout.",
 		RunE: func(cmd *cobra.Command, args []string) error {
@@ -623,15 +626,19 @@ func validateSavedPlanApplyFlags(profile string, scope diff.RecreateScope, rootD
 func render(root *rootOptions, stdout, stderr io.Writer, payload any, err error) error {
 	if root.JSONOutput {
 		writeErr := writeJSON(stdout, payload)
-		if writeErr != nil && err == nil {
+		if err == nil {
 			return writeErr
 		}
-		return err
+		if writeErr != nil {
+			return errors.Join(err, writeErr)
+		}
+		return markRenderedError(err)
 	}
 	if err != nil {
 		fmt.Fprintln(stderr, err.Error())
+		return markRenderedError(err)
 	}
-	return err
+	return nil
 }
 
 func writeSavedPlanFile(path string, saved syncpkg.SavedPlan) error {
@@ -711,4 +718,63 @@ func writeJSON(writer io.Writer, payload any) error {
 	encoder := json.NewEncoder(writer)
 	encoder.SetIndent("", "  ")
 	return encoder.Encode(payload)
+}
+
+type renderedError struct {
+	err error
+}
+
+func (e renderedError) Error() string {
+	return e.err.Error()
+}
+
+func (e renderedError) Unwrap() error {
+	return e.err
+}
+
+func requiredArgs(root *rootOptions, placeholders ...string) cobra.PositionalArgs {
+	return func(cmd *cobra.Command, args []string) error {
+		if len(args) < len(placeholders) {
+			return renderInputError(root, cmd, fmt.Errorf("missing required argument: %s", placeholders[len(args)]))
+		}
+		if len(args) > len(placeholders) {
+			return renderInputError(root, cmd, fmt.Errorf("unexpected argument: %q", args[len(placeholders)]))
+		}
+		return nil
+	}
+}
+
+func renderInputError(root *rootOptions, cmd *cobra.Command, err error) error {
+	if err == nil {
+		return nil
+	}
+	if root.JSONOutput {
+		writeErr := writeJSON(cmd.OutOrStdout(), map[string]any{"ok": false, "error": err.Error()})
+		if writeErr != nil {
+			return errors.Join(err, writeErr)
+		}
+		return markRenderedError(err)
+	}
+	fmt.Fprintln(cmd.ErrOrStderr(), err.Error())
+	fmt.Fprintf(cmd.ErrOrStderr(), "Run '%s --help' for usage.\n", cmd.CommandPath())
+	return markRenderedError(err)
+}
+
+func markRenderedError(err error) error {
+	if err == nil || IsRenderedError(err) {
+		return err
+	}
+	return renderedError{err: err}
+}
+
+func IsRenderedError(err error) bool {
+	var target renderedError
+	return errors.As(err, &target)
+}
+
+func PrintError(output io.Writer, err error) {
+	if err == nil || IsRenderedError(err) {
+		return
+	}
+	fmt.Fprintln(output, err.Error())
 }

@@ -3,6 +3,7 @@ package main
 import (
 	"context"
 	"fmt"
+	"io"
 	"os"
 	"strings"
 
@@ -35,7 +36,17 @@ func buildVersion() string {
 }
 
 func main() {
-	if err := cli.NewRootCommand(buildVersion()).ExecuteContext(context.Background()); err != nil {
-		os.Exit(1)
+	os.Exit(run(context.Background(), os.Stdout, os.Stderr, os.Args[1:]))
+}
+
+func run(ctx context.Context, stdout, stderr io.Writer, args []string) int {
+	cmd := cli.NewRootCommand(buildVersion())
+	cmd.SetOut(stdout)
+	cmd.SetErr(stderr)
+	cmd.SetArgs(args)
+	if err := cmd.ExecuteContext(ctx); err != nil {
+		cli.PrintError(stderr, err)
+		return 1
 	}
+	return 0
 }
