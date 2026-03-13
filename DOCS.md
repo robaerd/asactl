@@ -106,7 +106,7 @@ asactl config path              # Print config file location
 asactl config init              # Create starter config
 asactl config init --force      # Reset a profile to starter placeholders
 asactl config edit              # Open in editor
-asactl config show --json       # Dump current config
+asactl config show              # Show current config (redacted)
 ```
 
 ## YAML Schema

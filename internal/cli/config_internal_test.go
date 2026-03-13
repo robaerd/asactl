@@ -3,7 +3,6 @@ package cli
 import (
 	"bytes"
 	"context"
-	"encoding/json"
 	"errors"
 	"fmt"
 	"os"
@@ -117,7 +116,7 @@ private_key_path = "/tmp/live.pem"
 	}
 }
 
-func TestConfigShowJSONRedactsClientID(t *testing.T) {
+func TestConfigShowIgnoresJSONFlag(t *testing.T) {
 	override := filepath.Join(t.TempDir(), "config.toml")
 	t.Setenv(userconfig.OverrideEnvVar, override)
 	if err := os.WriteFile(override, []byte(`
@@ -141,16 +140,51 @@ private_key_path = "/tmp/private.pem"
 	if err := cmd.Execute(); err != nil {
 		t.Fatalf("config show: %v", err)
 	}
-	var payload struct {
-		Profile struct {
-			ClientID string `json:"client_id"`
-		} `json:"profile"`
+	output := stdout.String()
+	if !strings.Contains(output, "Selected profile: default") {
+		t.Fatalf("expected selected profile in output, got %q", output)
 	}
-	if err := json.Unmarshal(stdout.Bytes(), &payload); err != nil {
-		t.Fatalf("decode output: %v", err)
+	if strings.Contains(output, "very-secret-client-id") {
+		t.Fatalf("expected client id to be redacted, got %q", output)
 	}
-	if payload.Profile.ClientID == "very-secret-client-id" || payload.Profile.ClientID == "" {
-		t.Fatalf("expected redacted client id, got %q", payload.Profile.ClientID)
+	if !strings.Contains(output, "client_id: ****t-id") {
+		t.Fatalf("expected redacted client id in output, got %q", output)
+	}
+}
+
+func TestConfigShowPrintsRedactedProfile(t *testing.T) {
+	override := filepath.Join(t.TempDir(), "config.toml")
+	t.Setenv(userconfig.OverrideEnvVar, override)
+	if err := os.WriteFile(override, []byte(`
+version = 1
+default_profile = "default"
+
+[profiles.default]
+client_id = "very-secret-client-id"
+team_id = "team-id"
+key_id = "key-id"
+private_key_path = "/tmp/private.pem"
+`), 0o600); err != nil {
+		t.Fatalf("write config: %v", err)
+	}
+
+	root := &rootOptions{}
+	cmd := newConfigShowCommand(root)
+	stdout := &bytes.Buffer{}
+	cmd.SetOut(stdout)
+	cmd.SetErr(ioDiscard)
+	if err := cmd.Execute(); err != nil {
+		t.Fatalf("config show: %v", err)
+	}
+	output := stdout.String()
+	if !strings.Contains(output, "Selected profile: default") {
+		t.Fatalf("expected selected profile in output, got %q", output)
+	}
+	if strings.Contains(output, "very-secret-client-id") {
+		t.Fatalf("expected client id to be redacted, got %q", output)
+	}
+	if !strings.Contains(output, "client_id: ****t-id") {
+		t.Fatalf("expected redacted client id in output, got %q", output)
 	}
 }
 

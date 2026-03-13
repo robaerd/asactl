@@ -159,18 +159,6 @@ func newConfigShowCommand(root *rootOptions) *cobra.Command {
 				}
 				selected = userconfig.RedactedProfile(profileValue)
 			}
-			if root.JSONOutput {
-				return writeJSON(cmd.OutOrStdout(), map[string]any{
-					"ok":               true,
-					"path":             loaded.Path,
-					"exists":           loaded.Exists,
-					"version":          loaded.File.Version,
-					"default_profile":  loaded.File.DefaultProfile,
-					"selected_profile": selectedProfile,
-					"profile_names":    loaded.File.SortedProfileNames(),
-					"profile":          selected,
-				})
-			}
 			_, _ = fmt.Fprintf(cmd.OutOrStdout(), "Path: %s\n", loaded.Path)
 			_, _ = fmt.Fprintf(cmd.OutOrStdout(), "Exists: %t\n", loaded.Exists)
 			_, _ = fmt.Fprintf(cmd.OutOrStdout(), "Default profile: %s\n", loaded.File.DefaultProfile)
