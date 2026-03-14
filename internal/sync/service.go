@@ -188,7 +188,7 @@ func (e *Engine) preparePlan(ctx context.Context, input spec.Spec, options Optio
 		return preparedPlan{
 			runtime: runtime,
 			result:  result,
-		}, errors.New("defaults.currency must be set when campaign creation is possible")
+		}, errors.New("defaults.currency must be set when plan changes include budgets or bids")
 	}
 	return preparedPlan{
 		runtime: runtime,
@@ -222,15 +222,19 @@ func (e *Engine) applyPlanned(ctx context.Context, input spec.Spec, profile stri
 		return result, fmt.Errorf("planned changes %d exceed max-changes %d", mutations, maxChanges)
 	}
 	if requiresCurrencyForPlan(planned.Plan) && strings.TrimSpace(input.Defaults.Currency) == "" {
-		return result, errors.New("defaults.currency must be set when campaign creation is possible")
+		return result, errors.New("defaults.currency must be set when plan changes include budgets or bids")
 	}
-	if dryRun || mutations == 0 {
+	if mutations == 0 {
 		logger.Debug("Apply skipped", "dry_run", dryRun, "mutations", mutations)
 		return result, nil
 	}
 	runtime, err := userconfig.ResolveRuntime(input, profile)
 	if err != nil {
 		return result, err
+	}
+	if dryRun {
+		logger.Debug("Apply skipped", "dry_run", dryRun, "mutations", mutations)
+		return result, nil
 	}
 	api, err := e.apiFactory(runtime.Spec, runtime.AuthConfig)
 	if err != nil {
@@ -249,6 +253,9 @@ func (e *Engine) Apply(ctx context.Context, input spec.Spec, planned Result, opt
 }
 
 func (e *Engine) ApplySavedPlan(ctx context.Context, saved SavedPlan, options Options) (Result, error) {
+	if err := saved.Validate(); err != nil {
+		return saved.Result(), err
+	}
 	input, err := saved.ResolvedSpec()
 	if err != nil {
 		return saved.Result(), err
@@ -321,7 +328,32 @@ func scopeSummaryFor(scope diff.RecreateScope, summary appleadsapi.ScopeSummary)
 
 func requiresCurrencyForPlan(plan diff.Plan) bool {
 	for _, action := range plan.Actions {
-		if action.Kind == diff.ResourceCampaign && action.Operation == diff.OperationCreate {
+		switch action.Kind {
+		case diff.ResourceCampaign:
+			if action.Operation == diff.OperationCreate {
+				return true
+			}
+			if action.Operation == diff.OperationUpdate && actionChangesField(action, "daily_budget") {
+				return true
+			}
+		case diff.ResourceAdGroup:
+			switch action.Operation {
+			case diff.OperationCreate, diff.OperationUpdate, diff.OperationPause, diff.OperationActivate:
+				return true
+			}
+		case diff.ResourceKeyword:
+			switch action.Operation {
+			case diff.OperationCreate, diff.OperationUpdate, diff.OperationPause, diff.OperationActivate:
+				return true
+			}
+		}
+	}
+	return false
+}
+
+func actionChangesField(action diff.Action, field string) bool {
+	for _, change := range action.Changes {
+		if change.Field == field {
 			return true
 		}
 	}

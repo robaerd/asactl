@@ -140,6 +140,63 @@ func TestSavedPlanRoundTrip(t *testing.T) {
 	}
 }
 
+func TestSavedPlanRoundTripPreservesRenderMetadata(t *testing.T) {
+	loaded := testSpec(t)
+	content, err := spec.Format(loaded)
+	if err != nil {
+		t.Fatalf("format spec: %v", err)
+	}
+
+	plan := diff.Plan{Actions: []diff.Action{
+		{
+			Operation:    diff.OperationNoop,
+			Kind:         diff.ResourceCampaign,
+			Key:          spec.Fold(loaded.Campaigns[0].Name),
+			Description:  `"US - Brand - Exact"`,
+			SourcePath:   "campaigns/us.yaml",
+			CampaignName: loaded.Campaigns[0].Name,
+			Current:      diff.Campaign{ID: "1", Name: loaded.Campaigns[0].Name, Storefronts: []string{"US"}, DailyBudget: mustDecimal(t, "1.50"), Status: spec.StatusActive},
+			Desired:      diff.Campaign{Name: loaded.Campaigns[0].Name, Storefronts: []string{"US"}, DailyBudget: mustDecimal(t, "1.50"), Status: spec.StatusActive},
+		},
+		{
+			Operation:    diff.OperationDelete,
+			Kind:         diff.ResourceCampaign,
+			Key:          spec.Fold("Remote Campaign"),
+			Description:  `"Remote Campaign"`,
+			CampaignName: "Remote Campaign",
+			Current:      diff.Campaign{ID: "9", Name: "Remote Campaign", Storefronts: []string{"US"}, DailyBudget: mustDecimal(t, "1.00"), Status: spec.StatusActive},
+		},
+	}}
+	saved := SavedPlan{
+		Kind:             SavedPlanKind,
+		Version:          SavedPlanVersion,
+		Profile:          "default",
+		SpecYAML:         string(content),
+		Plan:             plan,
+		ActionRenderMeta: []diff.ActionRenderMetadata{{SourceOrder: 0, CampaignOrder: 0}, {SourceOrder: -1, CampaignOrder: -1, Remote: true}},
+	}
+
+	bytes, err := saved.Bytes()
+	if err != nil {
+		t.Fatalf("saved plan bytes: %v", err)
+	}
+	parsed, ok, err := ParseSavedPlan(bytes)
+	if err != nil {
+		t.Fatalf("parse saved plan: %v", err)
+	}
+	if !ok {
+		t.Fatal("expected saved plan to be recognized")
+	}
+
+	rendered := diff.RenderText(parsed.Result().Plan)
+	if !strings.Contains(rendered, "File: campaigns/us.yaml") {
+		t.Fatalf("expected source grouping to survive round trip, got:\n%s", rendered)
+	}
+	if !strings.Contains(rendered, "Remote-only") {
+		t.Fatalf("expected remote-only grouping to survive round trip, got:\n%s", rendered)
+	}
+}
+
 func TestApplySavedPlanDryRunAndMaxChanges(t *testing.T) {
 	loaded := testSpec(t)
 
@@ -190,6 +247,61 @@ func TestApplySavedPlanFailsWhenProfileMissing(t *testing.T) {
 	_, err = engine.ApplySavedPlan(context.Background(), saved, Options{})
 	if err == nil || !strings.Contains(err.Error(), `profile "missing" was not found`) {
 		t.Fatalf("expected missing profile error, got %v", err)
+	}
+}
+
+func TestApplySavedPlanRejectsMalformedPayloadBeforeApply(t *testing.T) {
+	loaded := testSpec(t)
+	api := &fakeAPI{}
+	engine := NewEngine(
+		slog.New(slog.NewTextHandler(io.Discard, nil)),
+		withAPIFactory(func(spec.Spec, auth.Config) (adsAPI, error) { return api, nil }),
+	)
+
+	_, saved, err := engine.PlanSaved(context.Background(), loaded, Options{})
+	if err != nil {
+		t.Fatalf("plan saved: %v", err)
+	}
+	saved.Plan.Actions[0].Desired = "not-a-campaign"
+
+	_, err = engine.ApplySavedPlan(context.Background(), saved, Options{})
+	if err == nil || !strings.Contains(err.Error(), "desired campaign") {
+		t.Fatalf("expected malformed payload error, got %v", err)
+	}
+	if api.applyCalls != 0 {
+		t.Fatalf("expected malformed saved plan to fail before apply, got %d apply calls", api.applyCalls)
+	}
+}
+
+func TestApplySavedPlanDryRunValidatesRuntimeConfig(t *testing.T) {
+	loaded := testSpec(t)
+	engine := NewEngine(
+		slog.New(slog.NewTextHandler(io.Discard, nil)),
+		withAPIFactory(func(spec.Spec, auth.Config) (adsAPI, error) { return &fakeAPI{}, nil }),
+	)
+
+	_, saved, err := engine.PlanSaved(context.Background(), loaded, Options{})
+	if err != nil {
+		t.Fatalf("plan saved: %v", err)
+	}
+
+	configPath := os.Getenv("ASACTL_CONFIG")
+	if err := os.WriteFile(configPath, []byte(`
+version = 1
+default_profile = "default"
+
+[profiles.default]
+client_id = "client-id"
+team_id = "team-id"
+key_id = "key-id"
+private_key_path = "/tmp/missing-private-key.pem"
+`), 0o600); err != nil {
+		t.Fatalf("rewrite config: %v", err)
+	}
+
+	_, err = engine.ApplySavedPlan(context.Background(), saved, Options{DryRun: true})
+	if err == nil || !strings.Contains(err.Error(), "private key") {
+		t.Fatalf("expected dry-run runtime validation error, got %v", err)
 	}
 }
 
@@ -294,6 +406,28 @@ func TestApplyFailsWhenCampaignCreateNeedsCurrency(t *testing.T) {
 	_, err := engine.Apply(context.Background(), loaded, planned, Options{})
 	if err == nil || !strings.Contains(err.Error(), "defaults.currency") {
 		t.Fatalf("expected defaults.currency error, got %v", err)
+	}
+}
+
+func TestApplyFailsWhenBidBearingPlanNeedsCurrency(t *testing.T) {
+	loaded := testSpec(t)
+	loaded.Defaults.Currency = ""
+
+	testCases := []diff.Action{
+		{Operation: diff.OperationUpdate, Kind: diff.ResourceCampaign, Changes: []diff.FieldChange{{Field: "daily_budget"}}},
+		{Operation: diff.OperationCreate, Kind: diff.ResourceAdGroup},
+		{Operation: diff.OperationPause, Kind: diff.ResourceAdGroup},
+		{Operation: diff.OperationCreate, Kind: diff.ResourceKeyword},
+		{Operation: diff.OperationActivate, Kind: diff.ResourceKeyword},
+	}
+
+	engine := NewEngine(slog.New(slog.NewTextHandler(io.Discard, nil)))
+	for _, action := range testCases {
+		planned := Result{Plan: diff.Plan{Actions: []diff.Action{action}}}
+		_, err := engine.Apply(context.Background(), loaded, planned, Options{})
+		if err == nil || !strings.Contains(err.Error(), "defaults.currency") {
+			t.Fatalf("expected defaults.currency error for %+v, got %v", action, err)
+		}
 	}
 }
 
