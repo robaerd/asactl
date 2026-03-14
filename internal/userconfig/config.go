@@ -138,7 +138,7 @@ func ResolveRuntime(input spec.Spec, profileOverride string) (Runtime, error) {
 	if err != nil {
 		return Runtime{}, err
 	}
-	profileName := selectedProfileName(profileOverride, input.Auth.Profile, loaded.File.DefaultProfile)
+	profileName := ResolveProfileSelection(profileOverride, input.Auth.Profile, loaded.File.DefaultProfile)
 	var selected Profile
 	if profileName != "" {
 		var ok bool
@@ -177,8 +177,8 @@ func firstNonBlank(values ...string) string {
 	return ""
 }
 
-func selectedProfileName(override, specProfile, defaultProfile string) string {
-	return firstNonBlank(override, specProfile, defaultProfile)
+func ResolveProfileSelection(override, specProfile, defaultProfile string) string {
+	return firstNonBlank(override, specProfile, defaultProfile, "default")
 }
 
 func (f File) SortedProfileNames() []string {
@@ -194,6 +194,15 @@ func RedactedProfile(profile Profile) Profile {
 	redacted := profile
 	if strings.TrimSpace(redacted.ClientID) != "" {
 		redacted.ClientID = redactTrailing(redacted.ClientID, 4)
+	}
+	if strings.TrimSpace(redacted.TeamID) != "" {
+		redacted.TeamID = redactTrailing(redacted.TeamID, 4)
+	}
+	if strings.TrimSpace(redacted.KeyID) != "" {
+		redacted.KeyID = redactTrailing(redacted.KeyID, 4)
+	}
+	if strings.TrimSpace(redacted.PrivateKeyPath) != "" {
+		redacted.PrivateKeyPath = "****"
 	}
 	return redacted
 }

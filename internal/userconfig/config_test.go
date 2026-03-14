@@ -102,6 +102,38 @@ private_key_path = "`+filepath.ToSlash(writePrivateKey(t))+`"
 	}
 }
 
+func TestResolveRuntimeFallsBackToImplicitDefaultProfile(t *testing.T) {
+	configPath := filepath.Join(t.TempDir(), "config.toml")
+	t.Setenv(userconfig.OverrideEnvVar, configPath)
+	if err := os.WriteFile(configPath, []byte(`
+version = 1
+
+[profiles.default]
+client_id = "client-id"
+team_id = "team-id"
+key_id = "key-id"
+private_key_path = "`+filepath.ToSlash(writePrivateKey(t))+`"
+`), 0o600); err != nil {
+		t.Fatalf("write config: %v", err)
+	}
+
+	runtime, err := userconfig.ResolveRuntime(spec.Spec{
+		Version:       1,
+		Kind:          spec.KindConfig,
+		CampaignGroup: spec.CampaignGroup{ID: "20744842"},
+		App:           spec.App{Name: "Readcap", AppID: "123456"},
+	}, "")
+	if err != nil {
+		t.Fatalf("resolve runtime: %v", err)
+	}
+	if runtime.ProfileName != "default" {
+		t.Fatalf("expected implicit default profile, got %q", runtime.ProfileName)
+	}
+	if runtime.AuthConfig.ClientID != "client-id" {
+		t.Fatalf("expected implicit default credentials, got %q", runtime.AuthConfig.ClientID)
+	}
+}
+
 func TestResolveRuntimeIgnoresRemovedEndpointOverrides(t *testing.T) {
 	configPath := filepath.Join(t.TempDir(), "config.toml")
 	t.Setenv(userconfig.OverrideEnvVar, configPath)

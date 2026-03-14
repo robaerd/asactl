@@ -3,8 +3,10 @@ package cli
 import (
 	"bytes"
 	"context"
+	"encoding/json"
 	"errors"
 	"fmt"
+	"io"
 	"os"
 	"path/filepath"
 	"slices"
@@ -16,12 +18,20 @@ import (
 )
 
 type fakeEditor struct {
-	path string
-	err  error
+	path   string
+	err    error
+	stdout string
+	stderr string
 }
 
-func (f *fakeEditor) Edit(_ context.Context, path string) error {
+func (f *fakeEditor) Edit(_ context.Context, path string, streams editorStreams) error {
 	f.path = path
+	if strings.TrimSpace(f.stdout) != "" {
+		_, _ = io.WriteString(streams.Stdout, f.stdout)
+	}
+	if strings.TrimSpace(f.stderr) != "" {
+		_, _ = io.WriteString(streams.Stderr, f.stderr)
+	}
 	return f.err
 }
 
@@ -116,7 +126,7 @@ private_key_path = "/tmp/live.pem"
 	}
 }
 
-func TestConfigShowIgnoresJSONFlag(t *testing.T) {
+func TestConfigShowJSONReturnsStructuredPayload(t *testing.T) {
 	override := filepath.Join(t.TempDir(), "config.toml")
 	t.Setenv(userconfig.OverrideEnvVar, override)
 	if err := os.WriteFile(override, []byte(`
@@ -140,15 +150,31 @@ private_key_path = "/tmp/private.pem"
 	if err := cmd.Execute(); err != nil {
 		t.Fatalf("config show: %v", err)
 	}
-	output := stdout.String()
-	if !strings.Contains(output, "Selected profile: default") {
-		t.Fatalf("expected selected profile in output, got %q", output)
+	var payload map[string]any
+	if err := json.Unmarshal(stdout.Bytes(), &payload); err != nil {
+		t.Fatalf("decode json output: %v", err)
 	}
-	if strings.Contains(output, "very-secret-client-id") {
-		t.Fatalf("expected client id to be redacted, got %q", output)
+	if payload["ok"] != true {
+		t.Fatalf("expected ok=true, got %+v", payload)
 	}
-	if !strings.Contains(output, "client_id: ****t-id") {
-		t.Fatalf("expected redacted client id in output, got %q", output)
+	if payload["selected_profile"] != "default" {
+		t.Fatalf("expected selected profile default, got %+v", payload)
+	}
+	profilePayload, ok := payload["profile"].(map[string]any)
+	if !ok {
+		t.Fatalf("expected profile payload, got %+v", payload["profile"])
+	}
+	if profilePayload["client_id"] != "****t-id" {
+		t.Fatalf("expected redacted client id, got %+v", profilePayload)
+	}
+	if profilePayload["team_id"] != "****m-id" {
+		t.Fatalf("expected redacted team id, got %+v", profilePayload)
+	}
+	if profilePayload["key_id"] != "****y-id" {
+		t.Fatalf("expected redacted key id, got %+v", profilePayload)
+	}
+	if profilePayload["private_key_path"] != "****" {
+		t.Fatalf("expected redacted private key path, got %+v", profilePayload)
 	}
 }
 
@@ -186,6 +212,15 @@ private_key_path = "/tmp/private.pem"
 	if !strings.Contains(output, "client_id: ****t-id") {
 		t.Fatalf("expected redacted client id in output, got %q", output)
 	}
+	if !strings.Contains(output, "team_id: ****m-id") {
+		t.Fatalf("expected redacted team id in output, got %q", output)
+	}
+	if !strings.Contains(output, "key_id: ****y-id") {
+		t.Fatalf("expected redacted key id in output, got %q", output)
+	}
+	if !strings.Contains(output, "private_key_path: ****") {
+		t.Fatalf("expected redacted private key path in output, got %q", output)
+	}
 }
 
 func TestConfigEditUsesInjectedEditor(t *testing.T) {
@@ -209,6 +244,34 @@ func TestConfigEditUsesInjectedEditor(t *testing.T) {
 	text := string(content)
 	if !strings.Contains(text, `client_id = "YOUR_APPLE_ADS_CLIENT_ID"`) && !strings.Contains(text, `client_id = 'YOUR_APPLE_ADS_CLIENT_ID'`) {
 		t.Fatalf("expected placeholder client_id in created config, got %s", text)
+	}
+}
+
+func TestConfigEditJSONKeepsStdoutMachineReadable(t *testing.T) {
+	override := filepath.Join(t.TempDir(), "config.toml")
+	t.Setenv(userconfig.OverrideEnvVar, override)
+	editor := &fakeEditor{stdout: "editor stdout\n", stderr: "editor stderr\n"}
+	root := &rootOptions{Editor: editor, JSONOutput: true}
+	cmd := newConfigEditCommand(root)
+	stdout := &bytes.Buffer{}
+	stderr := &bytes.Buffer{}
+	cmd.SetOut(stdout)
+	cmd.SetErr(stderr)
+	if err := cmd.Execute(); err != nil {
+		t.Fatalf("config edit --json: %v", err)
+	}
+	if strings.Contains(stdout.String(), "editor stdout") {
+		t.Fatalf("expected stdout to contain only json, got %q", stdout.String())
+	}
+	if !strings.Contains(stderr.String(), "editor stdout") || !strings.Contains(stderr.String(), "editor stderr") {
+		t.Fatalf("expected editor output on stderr, got %q", stderr.String())
+	}
+	var payload map[string]any
+	if err := json.Unmarshal(stdout.Bytes(), &payload); err != nil {
+		t.Fatalf("decode json output: %v", err)
+	}
+	if payload["ok"] != true {
+		t.Fatalf("expected ok=true payload, got %+v", payload)
 	}
 }
 
@@ -511,6 +574,30 @@ private_key_path = "/tmp/private.pem"
 	}
 }
 
+func TestMaybeBootstrapRuntimeConfigFallsBackToImplicitDefaultProfile(t *testing.T) {
+	override := filepath.Join(t.TempDir(), "config.toml")
+	t.Setenv(userconfig.OverrideEnvVar, override)
+	if err := os.WriteFile(override, []byte(`
+version = 1
+
+[profiles.default]
+client_id = "client-id"
+team_id = "team-id"
+key_id = "key-id"
+private_key_path = "/tmp/private.pem"
+`), 0o600); err != nil {
+		t.Fatalf("write config: %v", err)
+	}
+
+	if err := maybeBootstrapRuntimeConfig(spec.Spec{
+		Version: 1,
+		Kind:    spec.KindConfig,
+		App:     spec.App{Name: "Readcap", AppID: "123456"},
+	}, ""); err != nil {
+		t.Fatalf("expected implicit default profile to pass preflight, got %v", err)
+	}
+}
+
 var ioDiscard = &discardWriter{}
 
 type discardWriter struct{}
@@ -521,7 +608,7 @@ func (*discardWriter) Write(p []byte) (int, error) {
 
 func TestEnvEditorReturnsConfiguredError(t *testing.T) {
 	editor := &fakeEditor{err: errors.New("boom")}
-	if err := editor.Edit(context.Background(), "/tmp/config.toml"); err == nil {
+	if err := editor.Edit(context.Background(), "/tmp/config.toml", editorStreams{}); err == nil {
 		t.Fatal("expected fake editor error")
 	}
 }

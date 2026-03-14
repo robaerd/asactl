@@ -16,7 +16,13 @@ import (
 )
 
 type configEditor interface {
-	Edit(context.Context, string) error
+	Edit(context.Context, string, editorStreams) error
+}
+
+type editorStreams struct {
+	Stdin  io.Reader
+	Stdout io.Writer
+	Stderr io.Writer
 }
 
 type envEditor struct {
@@ -122,7 +128,15 @@ func newConfigEditCommand(root *rootOptions) *cobra.Command {
 					return render(root, cmd.OutOrStdout(), cmd.ErrOrStderr(), map[string]any{"ok": false, "error": err.Error()}, err)
 				}
 			}
-			if err := root.Editor.Edit(cmd.Context(), loaded.Path); err != nil {
+			streams := editorStreams{
+				Stdin:  cmd.InOrStdin(),
+				Stdout: cmd.OutOrStdout(),
+				Stderr: cmd.ErrOrStderr(),
+			}
+			if root.JSONOutput {
+				streams.Stdout = cmd.ErrOrStderr()
+			}
+			if err := root.Editor.Edit(cmd.Context(), loaded.Path, streams); err != nil {
 				return render(root, cmd.OutOrStdout(), cmd.ErrOrStderr(), map[string]any{"ok": false, "error": err.Error()}, err)
 			}
 			if root.JSONOutput {
@@ -159,6 +173,19 @@ func newConfigShowCommand(root *rootOptions) *cobra.Command {
 				}
 				selected = userconfig.RedactedProfile(profileValue)
 			}
+			if root.JSONOutput {
+				payload := map[string]any{
+					"ok":               true,
+					"path":             loaded.Path,
+					"exists":           loaded.Exists,
+					"default_profile":  loaded.File.DefaultProfile,
+					"selected_profile": selectedProfile,
+				}
+				if selectedProfile != "" {
+					payload["profile"] = selected
+				}
+				return writeJSON(cmd.OutOrStdout(), payload)
+			}
 			_, _ = fmt.Fprintf(cmd.OutOrStdout(), "Path: %s\n", loaded.Path)
 			_, _ = fmt.Fprintf(cmd.OutOrStdout(), "Exists: %t\n", loaded.Exists)
 			_, _ = fmt.Fprintf(cmd.OutOrStdout(), "Default profile: %s\n", loaded.File.DefaultProfile)
@@ -180,7 +207,7 @@ func printConfigProfile(output io.Writer, profile userconfig.Profile) {
 	_, _ = fmt.Fprintf(output, "private_key_path: %s\n", profile.PrivateKeyPath)
 }
 
-func (e envEditor) Edit(ctx context.Context, path string) error {
+func (e envEditor) Edit(ctx context.Context, path string, streams editorStreams) error {
 	editor, err := e.editorCommand()
 	if err != nil {
 		return err
@@ -190,9 +217,9 @@ func (e envEditor) Edit(ctx context.Context, path string) error {
 		return err
 	}
 	cmd := exec.CommandContext(ctx, command, args...)
-	cmd.Stdin = os.Stdin
-	cmd.Stdout = os.Stdout
-	cmd.Stderr = os.Stderr
+	cmd.Stdin = streams.Stdin
+	cmd.Stdout = streams.Stdout
+	cmd.Stderr = streams.Stderr
 	if err := cmd.Run(); err != nil {
 		return fmt.Errorf("open editor: %w", err)
 	}
@@ -250,7 +277,7 @@ func maybeBootstrapRuntimeConfig(input spec.Spec, profileOverride string) error 
 		return err
 	}
 
-	selectedProfile := resolvedBootstrapProfile(profileOverride, input.Auth.Profile, loaded.File.DefaultProfile)
+	selectedProfile := userconfig.ResolveProfileSelection(profileOverride, input.Auth.Profile, loaded.File.DefaultProfile)
 
 	if !loaded.Exists {
 		return runtimeConfigSetupError{
@@ -269,15 +296,6 @@ func maybeBootstrapRuntimeConfig(input spec.Spec, profileOverride string) error 
 		profile:        selectedProfile,
 		missingProfile: true,
 	}
-}
-
-func resolvedBootstrapProfile(values ...string) string {
-	for _, value := range values {
-		if trimmed := strings.TrimSpace(value); trimmed != "" {
-			return trimmed
-		}
-	}
-	return "default"
 }
 
 type runtimeConfigSetupError struct {
