@@ -16,6 +16,7 @@ import (
 	"os"
 	"path/filepath"
 	"runtime"
+	"strconv"
 	"strings"
 	"sync/atomic"
 	"testing"
@@ -234,6 +235,85 @@ func TestTokenProviderDoesNotEchoTokenErrorBody(t *testing.T) {
 	}
 	if strings.Contains(err.Error(), "super-secret-value") || strings.Contains(err.Error(), "client_secret") {
 		t.Fatalf("error leaked sensitive payload: %v", err)
+	}
+}
+
+func TestTokenProviderTreatsZeroExpiresInAsImmediateExpiry(t *testing.T) {
+	privateKeyPEM := pkcs8PrivateKeyPEM(t)
+	var calls atomic.Int32
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		call := calls.Add(1)
+		_ = json.NewEncoder(w).Encode(map[string]any{"access_token": "token-" + strconv.Itoa(int(call)), "expires_in": 0})
+	}))
+	defer server.Close()
+
+	provider := auth.NewTokenProvider(auth.Config{
+		ClientID:      "client-id",
+		TeamID:        "team-id",
+		KeyID:         "key-id",
+		PrivateKeyPEM: privateKeyPEM,
+	}, server.Client(), auth.WithTokenURL(server.URL))
+
+	token1, err := provider.AccessToken(context.Background(), false)
+	if err != nil {
+		t.Fatalf("access token: %v", err)
+	}
+	token2, err := provider.AccessToken(context.Background(), false)
+	if err != nil {
+		t.Fatalf("access token second call: %v", err)
+	}
+	if token1 == token2 {
+		t.Fatalf("expected immediate expiry to force refresh, got identical token %q", token1)
+	}
+	if calls.Load() != 2 {
+		t.Fatalf("expected two token requests, got %d", calls.Load())
+	}
+}
+
+func TestTokenProviderHonorsFractionalExpiresIn(t *testing.T) {
+	privateKeyPEM := pkcs8PrivateKeyPEM(t)
+	fixedNow := time.Unix(1_700_000_000, 0).UTC()
+	currentTime := fixedNow
+	var calls atomic.Int32
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		call := calls.Add(1)
+		_ = json.NewEncoder(w).Encode(map[string]any{"access_token": "token-" + strconv.Itoa(int(call)), "expires_in": 0.9})
+	}))
+	defer server.Close()
+
+	provider := auth.NewTokenProvider(auth.Config{
+		ClientID:      "client-id",
+		TeamID:        "team-id",
+		KeyID:         "key-id",
+		PrivateKeyPEM: privateKeyPEM,
+	}, server.Client(),
+		auth.WithClock(func() time.Time { return currentTime }),
+		auth.WithTokenURL(server.URL),
+		auth.WithAccessTokenRefreshSkew(0),
+	)
+
+	token1, err := provider.AccessToken(context.Background(), false)
+	if err != nil {
+		t.Fatalf("access token: %v", err)
+	}
+	currentTime = fixedNow.Add(800 * time.Millisecond)
+	token2, err := provider.AccessToken(context.Background(), false)
+	if err != nil {
+		t.Fatalf("cached access token: %v", err)
+	}
+	if token1 != token2 {
+		t.Fatalf("expected token reuse before fractional expiry, got %q and %q", token1, token2)
+	}
+	currentTime = fixedNow.Add(time.Second)
+	token3, err := provider.AccessToken(context.Background(), false)
+	if err != nil {
+		t.Fatalf("refreshed access token: %v", err)
+	}
+	if token3 == token2 {
+		t.Fatalf("expected refresh after fractional expiry, got %q", token3)
+	}
+	if calls.Load() != 2 {
+		t.Fatalf("expected two token requests, got %d", calls.Load())
 	}
 }
 

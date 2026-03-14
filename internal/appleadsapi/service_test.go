@@ -1248,6 +1248,45 @@ func TestApplyPlanFailsWhenCreateResponseMissingID(t *testing.T) {
 	}
 }
 
+func TestApplyPlanFailsOnNegativeKeywordDeleteItemLevelError(t *testing.T) {
+	tokenServer := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		_ = json.NewEncoder(w).Encode(map[string]any{"access_token": "token", "expires_in": 3600})
+	}))
+	defer tokenServer.Close()
+
+	apiServer := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		switch r.URL.Path {
+		case "/campaigns/1/negativekeywords/delete/bulk":
+			var payload []int64
+			decodeBody(t, r, &payload)
+			if len(payload) != 1 || payload[0] != 1 {
+				t.Fatalf("unexpected delete payload: %#v", payload)
+			}
+			_ = json.NewEncoder(w).Encode(map[string]any{
+				"data": []map[string]any{{
+					"id":      1,
+					"success": false,
+					"error":   map[string]any{"message": "cannot delete"},
+				}},
+			})
+		default:
+			t.Fatalf("unexpected path %s", r.URL.Path)
+		}
+	}))
+	defer apiServer.Close()
+
+	service := testService(t, tokenServer.URL, apiServer.URL)
+	plan := diff.Plan{Actions: []diff.Action{
+		{Operation: diff.OperationNoop, Kind: diff.ResourceCampaign, Key: "campaign", Current: diff.Campaign{ID: "1", Name: "US - Brand - Exact", Status: spec.StatusActive}, Desired: diff.Campaign{ID: "1", Name: "US - Brand - Exact", Status: spec.StatusActive}},
+		{Operation: diff.OperationDelete, Kind: diff.ResourceNegativeKeyword, Key: "campaign-negative", Current: diff.NegativeKeyword{ID: "1", Scope: diff.ScopeCampaign, CampaignName: "US - Brand - Exact", Text: "legacy", MatchType: spec.MatchTypeExact, Status: spec.StatusActive}},
+	}}
+
+	err := service.ApplyPlan(context.Background(), testSpec(), plan)
+	if err == nil || !strings.Contains(err.Error(), "cannot delete") {
+		t.Fatalf("expected item-level delete error, got %v", err)
+	}
+}
+
 func TestApplyPlanFailsOnMalformedNegativeKeywordBulkResponse(t *testing.T) {
 	tokenServer := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		_ = json.NewEncoder(w).Encode(map[string]any{"access_token": "token", "expires_in": 3600})

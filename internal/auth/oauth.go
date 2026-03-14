@@ -262,13 +262,10 @@ func (p *TokenProvider) AccessToken(ctx context.Context, forceRefresh bool) (str
 	if err != nil {
 		return "", err
 	}
-	if expiresIn <= 0 {
-		expiresIn = int(defaultAccessTokenTTL.Seconds())
-	}
 
 	p.accessToken = payload.AccessToken
-	p.accessTokenExpiresAt = now.Add(time.Duration(expiresIn) * time.Second)
-	p.logger.Debug("Access token refreshed", "expires_in_seconds", expiresIn, "expires_at", p.accessTokenExpiresAt)
+	p.accessTokenExpiresAt = now.Add(expiresIn)
+	p.logger.Debug("Access token refreshed", "expires_in", expiresIn, "expires_at", p.accessTokenExpiresAt)
 	return p.accessToken, nil
 }
 
@@ -344,10 +341,10 @@ func parsePrivateKey(rawPEM string) (*ecdsa.PrivateKey, error) {
 	return key, nil
 }
 
-func parseExpiresIn(value json.RawMessage) (int, error) {
+func parseExpiresIn(value json.RawMessage) (time.Duration, error) {
 	trimmed := strings.TrimSpace(string(value))
 	if trimmed == "" || trimmed == "null" {
-		return int(defaultAccessTokenTTL.Seconds()), nil
+		return defaultAccessTokenTTL, nil
 	}
 
 	var numeric json.Number
@@ -358,7 +355,7 @@ func parseExpiresIn(value json.RawMessage) (int, error) {
 	var quoted string
 	if err := json.Unmarshal(value, &quoted); err == nil {
 		if strings.TrimSpace(quoted) == "" {
-			return int(defaultAccessTokenTTL.Seconds()), nil
+			return defaultAccessTokenTTL, nil
 		}
 		return parseExpiresInSeconds(quoted)
 	}
@@ -366,7 +363,7 @@ func parseExpiresIn(value json.RawMessage) (int, error) {
 	return 0, errors.New("unsupported expires_in payload type")
 }
 
-func parseExpiresInSeconds(value string) (int, error) {
+func parseExpiresInSeconds(value string) (time.Duration, error) {
 	parsed, err := strconv.ParseFloat(strings.TrimSpace(value), 64)
 	if err != nil {
 		return 0, fmt.Errorf("parse expires_in %q: %w", value, err)
@@ -374,7 +371,7 @@ func parseExpiresInSeconds(value string) (int, error) {
 	if parsed < 0 {
 		return 0, errors.New("expires_in must be >= 0")
 	}
-	return int(parsed), nil
+	return time.Duration(parsed * float64(time.Second)), nil
 }
 
 func signES256(privateKey *ecdsa.PrivateKey, digest []byte) ([]byte, error) {

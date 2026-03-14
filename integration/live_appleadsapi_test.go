@@ -29,8 +29,14 @@ func TestAppleAdsLiveCLI(t *testing.T) {
 	savedPlanPath := filepath.Join(suite.workDir, "reconcile.plan.json")
 
 	beforeCreatives := suite.listCreatives(t)
+	stagesPassed := true
+	runStage := func(name string, fn func(t *testing.T)) {
+		if stagesPassed {
+			stagesPassed = t.Run(name, fn)
+		}
+	}
 
-	t.Run("ApplyDryRun", func(t *testing.T) {
+	runStage("ApplyDryRun", func(t *testing.T) {
 		result, _ := suite.runCLIJSON(t, "apply", baselinePath, "--dry-run")
 		if result.Applied {
 			t.Fatal("dry-run apply unexpectedly mutated live state")
@@ -45,7 +51,7 @@ func TestAppleAdsLiveCLI(t *testing.T) {
 		assertActionCountAtLeast(t, result.Plan, diff.OperationCreate, diff.ResourceCustomAd, 2)
 	})
 
-	t.Run("Create", func(t *testing.T) {
+	runStage("Create", func(t *testing.T) {
 		plan, _ := suite.runCLIJSON(t, "plan", baselinePath)
 		assertActionCountAtLeast(t, plan.Plan, diff.OperationCreate, diff.ResourceCampaign, 1)
 
@@ -70,13 +76,13 @@ func TestAppleAdsLiveCLI(t *testing.T) {
 		assertNoMutations(t, idempotent.Plan)
 	})
 
-	t.Run("Validate", func(t *testing.T) {
+	runStage("Validate", func(t *testing.T) {
 		suite.runCLIJSON(t, "validate", baselinePath)
 		suite.runCLIJSON(t, "validate", baselineManifestPath)
 		suite.runCLIJSON(t, "validate", generatorManifestPath)
 	})
 
-	t.Run("ManifestRecreate", func(t *testing.T) {
+	runStage("ManifestRecreate", func(t *testing.T) {
 		plan, _ := suite.runCLIJSON(t, "plan", baselineManifestPath, "--recreate")
 		if plan.RecreateScope != diff.RecreateScopeManaged {
 			t.Fatalf("expected managed recreate scope, got %q", plan.RecreateScope)
@@ -102,7 +108,7 @@ func TestAppleAdsLiveCLI(t *testing.T) {
 		assertNoMutations(t, idempotent.Plan)
 	})
 
-	t.Run("MaxChanges", func(t *testing.T) {
+	runStage("MaxChanges", func(t *testing.T) {
 		plan, _ := suite.runCLIJSON(t, "plan", matchTypeChangePath)
 		assertActionCountAtLeast(t, plan.Plan, diff.OperationDelete, diff.ResourceKeyword, 1)
 		assertActionCountAtLeast(t, plan.Plan, diff.OperationCreate, diff.ResourceKeyword, 1)
@@ -127,7 +133,7 @@ func TestAppleAdsLiveCLI(t *testing.T) {
 		assertNoMutations(t, idempotent.Plan)
 	})
 
-	t.Run("MatchTypeChange", func(t *testing.T) {
+	runStage("MatchTypeChange", func(t *testing.T) {
 		plan, _ := suite.runCLIJSON(t, "plan", matchTypeChangePath)
 		assertActionCountAtLeast(t, plan.Plan, diff.OperationDelete, diff.ResourceKeyword, 1)
 		assertActionCountAtLeast(t, plan.Plan, diff.OperationCreate, diff.ResourceKeyword, 1)
@@ -149,7 +155,7 @@ func TestAppleAdsLiveCLI(t *testing.T) {
 		assertNoMutations(t, idempotent.Plan)
 	})
 
-	t.Run("GeneratorsManifest", func(t *testing.T) {
+	runStage("GeneratorsManifest", func(t *testing.T) {
 		plan, _ := suite.runCLIJSON(t, "plan", generatorManifestPath, "--recreate")
 		if plan.RecreateScope != diff.RecreateScopeManaged {
 			t.Fatalf("expected managed recreate scope, got %q", plan.RecreateScope)
@@ -178,7 +184,7 @@ func TestAppleAdsLiveCLI(t *testing.T) {
 		assertNoMutations(t, idempotent.Plan)
 	})
 
-	t.Run("Recreate", func(t *testing.T) {
+	runStage("Recreate", func(t *testing.T) {
 		plan, _ := suite.runCLIJSON(t, "plan", baselinePath, "--recreate")
 		if plan.RecreateScope != diff.RecreateScopeManaged {
 			t.Fatalf("expected managed recreate scope, got %q", plan.RecreateScope)
@@ -200,7 +206,7 @@ func TestAppleAdsLiveCLI(t *testing.T) {
 		assertSingleManagedCampaign(t, snapshot, suite.names.Campaign)
 	})
 
-	t.Run("SavedPlanReplay", func(t *testing.T) {
+	runStage("SavedPlanReplay", func(t *testing.T) {
 		suite.mutateRemoteDrift(t, baseline)
 
 		plan, _ := suite.runCLIJSON(t, "plan", baselinePath, "--out", savedPlanPath)
@@ -227,7 +233,7 @@ func TestAppleAdsLiveCLI(t *testing.T) {
 		assertNoMutations(t, reconciled.Plan)
 	})
 
-	t.Run("DeletePaths", func(t *testing.T) {
+	runStage("DeletePaths", func(t *testing.T) {
 		plan, _ := suite.runCLIJSON(t, "plan", deletePath)
 		assertActionCountAtLeast(t, plan.Plan, diff.OperationDelete, diff.ResourceAdGroup, 1)
 		assertActionCountAtLeast(t, plan.Plan, diff.OperationDelete, diff.ResourceKeyword, 1)
@@ -253,7 +259,7 @@ func TestAppleAdsLiveCLI(t *testing.T) {
 		}
 	})
 
-	t.Run("WipeOrg", func(t *testing.T) {
+	runStage("WipeOrg", func(t *testing.T) {
 		check, _ := suite.runCLIJSON(t, "check-auth", baselinePath)
 		if check.ScopeSummary.OtherAppCampaignCount != 0 {
 			t.Fatalf("wipe-org requires an otherwise empty test org, got %+v", check.ScopeSummary)

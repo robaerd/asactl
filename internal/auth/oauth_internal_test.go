@@ -9,19 +9,22 @@ import (
 	"math/big"
 	"strings"
 	"testing"
+	"time"
 )
 
 func TestParseExpiresIn(t *testing.T) {
 	testCases := []struct {
 		name    string
 		raw     string
-		want    int
+		want    time.Duration
 		wantErr string
 	}{
-		{name: "number", raw: `3600`, want: 3600},
-		{name: "quoted number", raw: `"3600"`, want: 3600},
-		{name: "quoted decimal", raw: `"3600.0"`, want: 3600},
-		{name: "null", raw: `null`, want: int(defaultAccessTokenTTL.Seconds())},
+		{name: "number", raw: `3600`, want: time.Hour},
+		{name: "quoted number", raw: `"3600"`, want: time.Hour},
+		{name: "quoted decimal", raw: `"3600.0"`, want: time.Hour},
+		{name: "fractional", raw: `0.9`, want: 900 * time.Millisecond},
+		{name: "null", raw: `null`, want: defaultAccessTokenTTL},
+		{name: "blank string", raw: `" "`, want: defaultAccessTokenTTL},
 		{name: "invalid", raw: `"abc"`, wantErr: `parse expires_in "abc"`},
 	}
 
@@ -39,7 +42,7 @@ func TestParseExpiresIn(t *testing.T) {
 				t.Fatalf("parse expires_in: %v", err)
 			}
 			if got != testCase.want {
-				t.Fatalf("expected %d, got %d", testCase.want, got)
+				t.Fatalf("expected %s, got %s", testCase.want, got)
 			}
 		})
 	}

@@ -1,6 +1,7 @@
 package appleadsapi
 
 import (
+	"bytes"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -164,6 +165,45 @@ func appIDFromSpec(input spec.Spec) (int64, error) {
 }
 
 func parseItemLevelError(body []byte) error {
+	var response bulkResponse
+	if err := json.Unmarshal(body, &response); err != nil {
+		return fmt.Errorf("parse bulk response: %w", err)
+	}
+	if response.Data == nil {
+		return errors.New("bulk response missing data")
+	}
+	for _, item := range response.Data {
+		if item.Success != nil && !*item.Success {
+			return fmt.Errorf("item %q failed: %s", string(item.ID), rawMessageSummary(item.Error, item.Errors))
+		}
+		if hasRawMessage(item.Error) {
+			return fmt.Errorf("item %q failed: %s", string(item.ID), rawMessageSummary(item.Error, item.Errors))
+		}
+		if hasRawMessage(item.Errors) {
+			return fmt.Errorf("item %q failed: %s", string(item.ID), rawMessageSummary(item.Errors, item.Error))
+		}
+	}
+	return nil
+}
+
+func parseBulkDeleteResponse(body []byte) error {
+	var envelope struct {
+		Data json.RawMessage `json:"data"`
+	}
+	if err := json.Unmarshal(body, &envelope); err != nil {
+		return fmt.Errorf("parse bulk response: %w", err)
+	}
+	trimmed := bytes.TrimSpace(envelope.Data)
+	if len(trimmed) == 0 || bytes.Equal(trimmed, []byte("null")) {
+		return errors.New("bulk response missing data")
+	}
+	if trimmed[0] != '[' {
+		var count json.Number
+		if err := json.Unmarshal(trimmed, &count); err == nil {
+			return nil
+		}
+		return errors.New("bulk response missing data")
+	}
 	var response bulkResponse
 	if err := json.Unmarshal(body, &response); err != nil {
 		return fmt.Errorf("parse bulk response: %w", err)

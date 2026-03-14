@@ -1059,8 +1059,12 @@ func (s *Service) applyNegativeKeywords(ctx context.Context, session *applySessi
 			}
 			payload = append(payload, negativeID)
 		}
-		if _, err := s.client.requestJSON(ctx, http.MethodPost, deletePath, nil, payload); err != nil {
+		body, err := s.client.requestJSON(ctx, http.MethodPost, deletePath, nil, payload)
+		if err != nil {
 			return err
+		}
+		if err := parseBulkDeleteResponse(body); err != nil {
+			return fmt.Errorf("delete negative keywords for %s (%s): %w", bucketKey, joinActionKeys(item.actions), err)
 		}
 		s.logger.Debug("Deleted negative keyword batch", "bucket", bucketKey, "count", len(payload), "path", deletePath)
 	}
