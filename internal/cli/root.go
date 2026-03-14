@@ -272,7 +272,6 @@ func newPlanCommand(root *rootOptions) *cobra.Command {
 
 func newApplyCommand(root *rootOptions) *cobra.Command {
 	var dryRun bool
-	var maxChanges int
 	var recreate bool
 	var wipeOrg bool
 	var yes bool
@@ -289,7 +288,7 @@ func newApplyCommand(root *rootOptions) *cobra.Command {
 			if err != nil {
 				return render(root, cmd.OutOrStdout(), cmd.ErrOrStderr(), map[string]any{"ok": false, "error": err.Error(), "recreate": recreate, "wipe_org": wipeOrg}, err)
 			}
-			logger.Debug("Apply command started", "input_path", args[0], "recreate_scope", scope, "dry_run", dryRun, "max_changes", maxChanges)
+			logger.Debug("Apply command started", "input_path", args[0], "recreate_scope", scope, "dry_run", dryRun)
 			target, err := loadApplyTarget(args[0], rootDir, cmd.InOrStdin())
 			if err != nil {
 				return render(root, cmd.OutOrStdout(), cmd.ErrOrStderr(), map[string]any{"ok": false, "error": err.Error(), "recreate": recreate, "wipe_org": wipeOrg}, err)
@@ -342,10 +341,6 @@ func newApplyCommand(root *rootOptions) *cobra.Command {
 				}
 				return nil
 			}
-			if maxChanges > 0 && mutations > maxChanges {
-				err := fmt.Errorf("planned changes %d exceed max-changes %d", mutations, maxChanges)
-				return render(root, cmd.OutOrStdout(), cmd.ErrOrStderr(), resultPayload(result, applyScope, map[string]any{"ok": false, "error": err.Error()}), err)
-			}
 			if !yes {
 				if args[0] == "-" {
 					err := errors.New("interactive confirmation is not supported when reading the spec from stdin; use --yes")
@@ -363,9 +358,9 @@ func newApplyCommand(root *rootOptions) *cobra.Command {
 			var applied syncpkg.Result
 			var applyErr error
 			if target.IsSavedPlan {
-				applied, applyErr = engine.ApplySavedPlan(cmd.Context(), target.SavedPlan, syncpkg.Options{DryRun: false, MaxChanges: maxChanges})
+				applied, applyErr = engine.ApplySavedPlan(cmd.Context(), target.SavedPlan, syncpkg.Options{DryRun: false})
 			} else {
-				applied, applyErr = engine.Apply(cmd.Context(), target.Spec, result, syncpkg.Options{DryRun: false, MaxChanges: maxChanges, RecreateScope: scope, Profile: profile})
+				applied, applyErr = engine.Apply(cmd.Context(), target.Spec, result, syncpkg.Options{DryRun: false, RecreateScope: scope, Profile: profile})
 			}
 			if applyErr != nil {
 				return render(root, cmd.OutOrStdout(), cmd.ErrOrStderr(), resultPayload(applied, applyScope, map[string]any{"ok": false, "error": applyErr.Error()}), applyErr)
@@ -381,7 +376,6 @@ func newApplyCommand(root *rootOptions) *cobra.Command {
 	cmd.Flags().BoolVar(&dryRun, "dry-run", false, "compute the apply plan without mutating")
 	cmd.Flags().BoolVar(&recreate, "recreate", false, "delete all managed campaigns in the configured campaign_group.id + app.app_id scope before recreating the YAML-defined state")
 	cmd.Flags().BoolVar(&wipeOrg, "wipe-org", false, "delete all remote campaigns visible in the configured organization before recreating the YAML-defined state")
-	cmd.Flags().IntVar(&maxChanges, "max-changes", 0, "abort if planned changes exceed this value")
 	cmd.Flags().StringVar(&profile, "profile", "", "user config profile to use for runtime auth and org resolution")
 	cmd.Flags().BoolVar(&yes, "yes", false, "skip interactive confirmation")
 	cmd.Flags().StringVar(&rootDir, "root", "", "root directory for resolving relative includes when reading from stdin")

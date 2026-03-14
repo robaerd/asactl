@@ -4,7 +4,6 @@ package integration_test
 
 import (
 	"path/filepath"
-	"strconv"
 	"strings"
 	"testing"
 
@@ -105,31 +104,6 @@ func TestAppleAdsLiveCLI(t *testing.T) {
 		assertSingleManagedCampaign(t, snapshot, suite.names.Campaign)
 
 		idempotent := suite.waitForNoMutationsPlan(t, baselineManifestPath)
-		assertNoMutations(t, idempotent.Plan)
-	})
-
-	runStage("MaxChanges", func(t *testing.T) {
-		plan, _ := suite.runCLIJSON(t, "plan", matchTypeChangePath)
-		assertActionCountAtLeast(t, plan.Plan, diff.OperationDelete, diff.ResourceKeyword, 1)
-		assertActionCountAtLeast(t, plan.Plan, diff.OperationCreate, diff.ResourceKeyword, 1)
-		mutations := diff.MutatingActionCount(plan.Plan)
-		if mutations != 2 {
-			t.Fatalf("expected exactly 2 mutations for match-type change, got %d in %+v", mutations, plan.Plan.Actions)
-		}
-		threshold := strconv.Itoa(mutations - 1)
-
-		result, invocation, err := suite.runCLIJSONAllowError(t, "apply", matchTypeChangePath, "--max-changes", threshold, "--yes")
-		if err == nil {
-			t.Fatalf("expected apply to fail under --max-changes; stdout=%s stderr=%s", strings.TrimSpace(string(invocation.Stdout)), strings.TrimSpace(string(invocation.Stderr)))
-		}
-		if result.OK {
-			t.Fatalf("expected json result ok=false for --max-changes rejection, got %+v", result)
-		}
-		if !strings.Contains(result.Error, "exceed max-changes") {
-			t.Fatalf("expected max-changes rejection message, got error=%q err=%v", result.Error, err)
-		}
-
-		idempotent := suite.waitForNoMutationsPlan(t, baselinePath)
 		assertNoMutations(t, idempotent.Plan)
 	})
 

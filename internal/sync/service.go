@@ -3,7 +3,6 @@ package sync
 import (
 	"context"
 	"errors"
-	"fmt"
 	"log/slog"
 	"net/http"
 	"slices"
@@ -20,7 +19,6 @@ import (
 
 type Options struct {
 	DryRun        bool
-	MaxChanges    int
 	RecreateScope diff.RecreateScope
 	Profile       string
 }
@@ -213,14 +211,11 @@ func (e *Engine) PlanSaved(ctx context.Context, input spec.Spec, options Options
 	return prepared.result, saved, nil
 }
 
-func (e *Engine) applyPlanned(ctx context.Context, input spec.Spec, profile string, planned Result, maxChanges int, dryRun bool, scope diff.RecreateScope) (Result, error) {
+func (e *Engine) applyPlanned(ctx context.Context, input spec.Spec, profile string, planned Result, dryRun bool, scope diff.RecreateScope) (Result, error) {
 	logger := logging.Component(e.logger, "sync")
 	result := planned
 	mutations := diff.MutatingActionCount(planned.Plan)
-	logger.Debug("Apply started", "mutations", mutations, "dry_run", dryRun, "max_changes", maxChanges, "recreate_scope", scope)
-	if maxChanges > 0 && mutations > maxChanges {
-		return result, fmt.Errorf("planned changes %d exceed max-changes %d", mutations, maxChanges)
-	}
+	logger.Debug("Apply started", "mutations", mutations, "dry_run", dryRun, "recreate_scope", scope)
 	if requiresCurrencyForPlan(planned.Plan) && strings.TrimSpace(input.Defaults.Currency) == "" {
 		return result, errors.New("defaults.currency must be set when plan changes include budgets or bids")
 	}
@@ -249,7 +244,7 @@ func (e *Engine) applyPlanned(ctx context.Context, input spec.Spec, profile stri
 }
 
 func (e *Engine) Apply(ctx context.Context, input spec.Spec, planned Result, options Options) (Result, error) {
-	return e.applyPlanned(ctx, input, options.Profile, planned, options.MaxChanges, options.DryRun, options.RecreateScope)
+	return e.applyPlanned(ctx, input, options.Profile, planned, options.DryRun, options.RecreateScope)
 }
 
 func (e *Engine) ApplySavedPlan(ctx context.Context, saved SavedPlan, options Options) (Result, error) {
@@ -260,7 +255,7 @@ func (e *Engine) ApplySavedPlan(ctx context.Context, saved SavedPlan, options Op
 	if err != nil {
 		return saved.Result(), err
 	}
-	return e.applyPlanned(ctx, input, saved.Profile, saved.Result(), options.MaxChanges, options.DryRun, saved.RecreateScope)
+	return e.applyPlanned(ctx, input, saved.Profile, saved.Result(), options.DryRun, saved.RecreateScope)
 }
 
 func (e *Engine) CheckAuth(ctx context.Context, input spec.Spec, profile string) (CheckAuthResult, error) {

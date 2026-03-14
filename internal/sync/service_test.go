@@ -63,7 +63,7 @@ func (api *fakeAPI) ApplyPlan(_ context.Context, input spec.Spec, plan diff.Plan
 	return api.applyErr
 }
 
-func TestApplyDryRunAndMaxChanges(t *testing.T) {
+func TestApplyDryRun(t *testing.T) {
 	loaded := testSpec(t)
 
 	api := &fakeAPI{}
@@ -86,14 +86,6 @@ func TestApplyDryRunAndMaxChanges(t *testing.T) {
 	}
 	if api.applyCalls != 0 {
 		t.Fatalf("expected no apply calls during dry run, got %d", api.applyCalls)
-	}
-
-	_, err = engine.Apply(context.Background(), loaded, planned, Options{MaxChanges: 1})
-	if err == nil || !strings.Contains(err.Error(), "max-changes") {
-		t.Fatalf("expected max-changes error, got %v", err)
-	}
-	if api.applyCalls != 0 {
-		t.Fatalf("expected no apply calls when max changes exceeded, got %d", api.applyCalls)
 	}
 }
 
@@ -197,7 +189,7 @@ func TestSavedPlanRoundTripPreservesRenderMetadata(t *testing.T) {
 	}
 }
 
-func TestApplySavedPlanDryRunAndMaxChanges(t *testing.T) {
+func TestApplySavedPlanDryRun(t *testing.T) {
 	loaded := testSpec(t)
 
 	api := &fakeAPI{}
@@ -220,14 +212,6 @@ func TestApplySavedPlanDryRunAndMaxChanges(t *testing.T) {
 	}
 	if api.applyCalls != 0 {
 		t.Fatalf("expected no apply calls during saved-plan dry run, got %d", api.applyCalls)
-	}
-
-	_, err = engine.ApplySavedPlan(context.Background(), saved, Options{MaxChanges: 1})
-	if err == nil || !strings.Contains(err.Error(), "max-changes") {
-		t.Fatalf("expected max-changes error, got %v", err)
-	}
-	if api.applyCalls != 0 {
-		t.Fatalf("expected no apply calls when saved-plan max changes exceeded, got %d", api.applyCalls)
 	}
 }
 

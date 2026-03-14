@@ -71,7 +71,6 @@ asactl apply saved-plan.json --yes
 | `--dry-run` | Show what would happen without changing anything |
 | `--recreate` | Delete and rebuild everything managed for this app scope |
 | `--wipe-org` | Delete every campaign in the campaign group, then rebuild from YAML |
-| `--max-changes N` | Stop if the plan would make more than `N` changes |
 
 **Saved plan behavior:**
 - `apply <saved-plan>` uses the saved plan as-is. It does not re-fetch remote state or build a new plan.
@@ -289,7 +288,6 @@ asactl apply prod.plan --yes                           # Apply for real
 ```
 
 - Always `plan` before `apply`.
-- Use `--max-changes N` to limit the number of mutations per apply.
 
 ## Troubleshooting
 
