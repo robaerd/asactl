@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"errors"
 	"fmt"
+	"io"
 	"os"
 	"path/filepath"
 	"strings"
@@ -282,7 +283,17 @@ func decodeCampaignsFile(data []byte) (CampaignsFile, error) {
 func decodeKnownFields(data []byte, out any) error {
 	decoder := yaml.NewDecoder(bytes.NewReader(data))
 	decoder.KnownFields(true)
-	return decoder.Decode(out)
+	if err := decoder.Decode(out); err != nil {
+		return err
+	}
+	var extra yaml.Node
+	if err := decoder.Decode(&extra); err != nil {
+		if errors.Is(err, io.EOF) {
+			return nil
+		}
+		return err
+	}
+	return errors.New("expected a single YAML document")
 }
 
 func hasRootKey(root *yaml.Node, key string) bool {

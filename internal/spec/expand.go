@@ -6,6 +6,14 @@ import (
 )
 
 func Normalize(input Spec) Spec {
+	return normalizeSpec(input, true)
+}
+
+func NormalizeWithoutGeneratedNegatives(input Spec) Spec {
+	return normalizeSpec(input, false)
+}
+
+func normalizeSpec(input Spec, includeGeneratedNegatives bool) Spec {
 	clone := input
 	clone.Kind = KindConfig
 	clone.Defaults = normalizeDefaults(input.Defaults)
@@ -30,7 +38,9 @@ func Normalize(input Spec) Spec {
 		clone.Campaigns = append(clone.Campaigns, normalizedCampaign)
 	}
 
-	applyGeneratedOverlapNegatives(&clone)
+	if includeGeneratedNegatives {
+		applyGeneratedOverlapNegatives(&clone)
+	}
 	return clone
 }
 

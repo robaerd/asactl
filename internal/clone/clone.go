@@ -28,7 +28,7 @@ func Spec(input spec.Spec, storefront string, bidMultiplier float64, budgetMulti
 	if err != nil {
 		return spec.Spec{}, fmt.Errorf("parse budget multiplier: %w", err)
 	}
-	clone := spec.Normalize(input)
+	clone := spec.NormalizeWithoutGeneratedNegatives(input)
 	clone.Meta = spec.Meta{}
 	storefront = strings.ToUpper(strings.TrimSpace(storefront))
 	oldNames := map[string]string{}

@@ -36,13 +36,19 @@ func (d *Decimal) UnmarshalYAML(node *yaml.Node) error {
 	if parsed.IsNegative() {
 		return errors.New("decimal value must be >= 0")
 	}
+	if parsed.Exponent() < -2 {
+		return errors.New("decimal value must have at most 2 fractional digits")
+	}
 	d.Decimal = parsed
 	return nil
 }
 
-// MarshalYAML emits fixed-scale decimals and relies on yaml.v3 preserving the
-// scalar value so the document round-trips back into the same numeric amount.
+// MarshalYAML emits fixed-scale decimals and rejects values that were not
+// already normalized to YAML-safe precision.
 func (d Decimal) MarshalYAML() (any, error) {
+	if d.Decimal.Exponent() < -2 {
+		return nil, errors.New("decimal value must have at most 2 fractional digits")
+	}
 	return &yaml.Node{Kind: yaml.ScalarNode, Tag: "!!float", Value: d.Decimal.StringFixedBank(2)}, nil
 }
 

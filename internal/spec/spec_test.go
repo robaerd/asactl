@@ -269,6 +269,13 @@ func TestLoadRejectsNonMapping(t *testing.T) {
 	}
 }
 
+func TestLoadRejectsMultipleDocuments(t *testing.T) {
+	_, err := spec.Load([]byte("version: 1\nkind: Config\ncampaign_group:\n  id: \"20744842\"\nauth:\n  profile: default\napp:\n  name: x\n  app_id: \"1\"\ndefaults:\n  currency: USD\ncampaigns: []\n---\nkind: Config\n"))
+	if err == nil || !strings.Contains(err.Error(), "single YAML document") {
+		t.Fatalf("expected single-document error, got %v", err)
+	}
+}
+
 func TestLoadFile(t *testing.T) {
 	tempDir := t.TempDir()
 	path := filepath.Join(tempDir, "sample.yaml")

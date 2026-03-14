@@ -85,6 +85,29 @@ func TestCloneClearsSourceMetadata(t *testing.T) {
 	}
 }
 
+func TestCloneDoesNotMaterializeGeneratedNegatives(t *testing.T) {
+	loaded, err := spec.LoadFile(filepath.Join("..", "..", "examples", "starter_with_generators.yaml"))
+	if err != nil {
+		t.Fatalf("load spec: %v", err)
+	}
+
+	cloned, err := clonepkg.Spec(loaded, "CA", 1.0, 1.0)
+	if err != nil {
+		t.Fatalf("clone spec: %v", err)
+	}
+
+	if len(cloned.Generators) != 1 {
+		t.Fatalf("expected generators to be preserved, got %d", len(cloned.Generators))
+	}
+	discovery := cloned.Campaigns[len(cloned.Campaigns)-1]
+	if discovery.Name != "CA - Discovery" {
+		t.Fatalf("expected rewritten discovery campaign, got %q", discovery.Name)
+	}
+	if len(discovery.CampaignNegativeKeywords) != 1 || discovery.CampaignNegativeKeywords[0].Text != "calendar" {
+		t.Fatalf("expected only explicit campaign negative keywords, got %+v", discovery.CampaignNegativeKeywords)
+	}
+}
+
 func TestCloneRejectsZeroMultipliers(t *testing.T) {
 	loaded, err := spec.LoadFile(filepath.Join("..", "..", "examples", "starter_with_generators.yaml"))
 	if err != nil {

@@ -5,6 +5,7 @@ import (
 	"testing"
 
 	"github.com/robaerd/asactl/internal/spec"
+	"github.com/shopspring/decimal"
 	"gopkg.in/yaml.v3"
 )
 
@@ -31,6 +32,28 @@ func TestDecimalMarshalYAMLRoundTripPreservesFixedScale(t *testing.T) {
 	}
 	if decoded.Bid.String() != "1.20" {
 		t.Fatalf("expected round-tripped fixed scale, got %q", decoded.Bid.String())
+	}
+}
+
+func TestDecimalRejectsMoreThanTwoFractionalDigitsInYAML(t *testing.T) {
+	var decoded struct {
+		Bid spec.Decimal `yaml:"bid"`
+	}
+	err := yaml.Unmarshal([]byte("bid: 1.005\n"), &decoded)
+	if err == nil || !strings.Contains(err.Error(), "at most 2 fractional digits") {
+		t.Fatalf("expected >2 fractional digit error, got %v", err)
+	}
+}
+
+func TestDecimalMarshalYAMLRejectsHighPrecisionValue(t *testing.T) {
+	value := struct {
+		Bid spec.Decimal `yaml:"bid"`
+	}{
+		Bid: spec.Decimal{Decimal: decimal.RequireFromString("1.005")},
+	}
+	_, err := yaml.Marshal(value)
+	if err == nil || !strings.Contains(err.Error(), "at most 2 fractional digits") {
+		t.Fatalf("expected marshal precision guard, got %v", err)
 	}
 }
 
