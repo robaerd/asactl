@@ -717,6 +717,7 @@ func (stdioPrompter) Confirm(ctx context.Context, input io.Reader, output io.Wri
 func writeJSON(writer io.Writer, payload any) error {
 	encoder := json.NewEncoder(writer)
 	encoder.SetIndent("", "  ")
+	encoder.SetEscapeHTML(false)
 	return encoder.Encode(payload)
 }
 
