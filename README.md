@@ -57,7 +57,7 @@ asactl config init
 asactl config edit
 ```
 
-The command bootstraps a starter config at `~/.asactl/config.toml`. You will just need to fill in your Apple Ads API credentials: client ID, team ID, key ID, and private key path.
+This creates a starter config at `~/.asactl/config.toml`. Fill in your Apple Ads API credentials: client ID, team ID, key ID, and private key path before running `check-auth`, `plan`, or `apply`.
 
 See [DOCS.md - Auth Configuration](DOCS.md#auth-configuration) for full key generation and setup instructions.
 

@@ -97,7 +97,7 @@ func newCheckAuthCommand(root *rootOptions) *cobra.Command {
 			if err != nil {
 				return render(root, cmd.OutOrStdout(), cmd.ErrOrStderr(), map[string]any{"ok": false, "error": err.Error()}, err)
 			}
-			if err := maybeBootstrapRuntimeConfig(cmd.Context(), root.Editor, loaded, profile); err != nil {
+			if err := maybeBootstrapRuntimeConfig(loaded, profile); err != nil {
 				return render(root, cmd.OutOrStdout(), cmd.ErrOrStderr(), map[string]any{"ok": false, "error": err.Error()}, err)
 			}
 			engine := root.newSyncEngine(cmd.ErrOrStderr())
@@ -221,7 +221,7 @@ func newPlanCommand(root *rootOptions) *cobra.Command {
 			if err != nil {
 				return render(root, cmd.OutOrStdout(), cmd.ErrOrStderr(), map[string]any{"ok": false, "error": err.Error(), "recreate": recreate, "wipe_org": wipeOrg}, err)
 			}
-			if err := maybeBootstrapRuntimeConfig(cmd.Context(), root.Editor, loaded, profile); err != nil {
+			if err := maybeBootstrapRuntimeConfig(loaded, profile); err != nil {
 				return render(root, cmd.OutOrStdout(), cmd.ErrOrStderr(), map[string]any{"ok": false, "error": err.Error(), "recreate": recreate, "wipe_org": wipeOrg}, err)
 			}
 			engine := root.newSyncEngine(cmd.ErrOrStderr())
@@ -307,13 +307,13 @@ func newApplyCommand(root *rootOptions) *cobra.Command {
 				if specErr != nil {
 					return render(root, cmd.OutOrStdout(), cmd.ErrOrStderr(), resultPayload(target.SavedPlan.Result(), target.SavedPlan.RecreateScope, map[string]any{"ok": false, "error": specErr.Error()}), specErr)
 				}
-				if err := maybeBootstrapRuntimeConfig(cmd.Context(), root.Editor, savedSpec, target.SavedPlan.Profile); err != nil {
+				if err := maybeBootstrapRuntimeConfig(savedSpec, target.SavedPlan.Profile); err != nil {
 					return render(root, cmd.OutOrStdout(), cmd.ErrOrStderr(), resultPayload(target.SavedPlan.Result(), target.SavedPlan.RecreateScope, map[string]any{"ok": false, "error": err.Error()}), err)
 				}
 				result = target.SavedPlan.Result()
 				applyScope = target.SavedPlan.RecreateScope
 			} else {
-				if err := maybeBootstrapRuntimeConfig(cmd.Context(), root.Editor, target.Spec, profile); err != nil {
+				if err := maybeBootstrapRuntimeConfig(target.Spec, profile); err != nil {
 					return render(root, cmd.OutOrStdout(), cmd.ErrOrStderr(), map[string]any{"ok": false, "error": err.Error(), "recreate": recreate, "wipe_org": wipeOrg}, err)
 				}
 				result, err = engine.Plan(cmd.Context(), target.Spec, syncpkg.Options{RecreateScope: scope, Profile: profile})

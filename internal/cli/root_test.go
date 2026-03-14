@@ -98,6 +98,88 @@ func TestCheckAuthCommandRuns(t *testing.T) {
 	}
 }
 
+func TestRuntimeCommandsGuideMissingConfig(t *testing.T) {
+	specPath := writeRuntimeConfigSpec(t, "default")
+	testCases := []struct {
+		name string
+		args []string
+	}{
+		{name: "check-auth", args: []string{"check-auth", specPath}},
+		{name: "plan", args: []string{"plan", specPath}},
+		{name: "apply", args: []string{"apply", specPath, "--yes"}},
+	}
+
+	for _, testCase := range testCases {
+		t.Run(testCase.name, func(t *testing.T) {
+			override := filepath.Join(t.TempDir(), "config.toml")
+			t.Setenv(userconfig.OverrideEnvVar, override)
+
+			cmd := cli.NewRootCommand("test-version")
+			stdout := &bytes.Buffer{}
+			stderr := &bytes.Buffer{}
+			cmd.SetOut(stdout)
+			cmd.SetErr(stderr)
+			cmd.SetArgs(testCase.args)
+
+			err := cmd.Execute()
+			if err == nil {
+				t.Fatal("expected missing-config error")
+			}
+			if !strings.Contains(err.Error(), "User config is missing") {
+				t.Fatalf("expected missing-config guidance, got %v", err)
+			}
+			if !strings.Contains(err.Error(), "asactl config init") || !strings.Contains(err.Error(), "asactl config edit") {
+				t.Fatalf("expected config setup guidance, got %v", err)
+			}
+			if stdout.Len() != 0 {
+				t.Fatalf("expected empty stdout, got %q", stdout.String())
+			}
+			if !strings.Contains(stderr.String(), "User config is missing") {
+				t.Fatalf("expected stderr guidance, got %q", stderr.String())
+			}
+			if _, statErr := os.Stat(override); !errors.Is(statErr, os.ErrNotExist) {
+				t.Fatalf("expected config file to remain missing, stat err=%v", statErr)
+			}
+		})
+	}
+}
+
+func TestRuntimeCommandsGuideMissingConfigInJSON(t *testing.T) {
+	override := filepath.Join(t.TempDir(), "config.toml")
+	t.Setenv(userconfig.OverrideEnvVar, override)
+	specPath := writeRuntimeConfigSpec(t, "default")
+
+	cmd := cli.NewRootCommand("test-version")
+	stdout := &bytes.Buffer{}
+	stderr := &bytes.Buffer{}
+	cmd.SetOut(stdout)
+	cmd.SetErr(stderr)
+	cmd.SetArgs([]string{"--json", "plan", specPath})
+
+	err := cmd.Execute()
+	if err == nil {
+		t.Fatal("expected missing-config error")
+	}
+	if stderr.Len() != 0 {
+		t.Fatalf("expected empty stderr, got %q", stderr.String())
+	}
+	var payload map[string]any
+	decoder := json.NewDecoder(bytes.NewReader(stdout.Bytes()))
+	if err := decoder.Decode(&payload); err != nil {
+		t.Fatalf("decode json output: %v output=%s", err, stdout.String())
+	}
+	if err := decoder.Decode(&map[string]any{}); err != io.EOF {
+		t.Fatalf("expected a single JSON document, got extra output: %s", stdout.String())
+	}
+	if payload["ok"] != false {
+		t.Fatalf("expected ok=false, got %v", payload["ok"])
+	}
+	errorText, _ := payload["error"].(string)
+	if !strings.Contains(errorText, "asactl config init") || !strings.Contains(errorText, "asactl config edit") {
+		t.Fatalf("expected config setup guidance in JSON error, got %v", payload["error"])
+	}
+}
+
 func TestRequiredArgsAreRenderedForYAMLCommands(t *testing.T) {
 	testCases := []struct {
 		name       string
@@ -1019,6 +1101,29 @@ campaigns:
 `)
 	if err := os.WriteFile(specPath, specContents, 0o600); err != nil {
 		t.Fatalf("write spec: %v", err)
+	}
+	return specPath
+}
+
+func writeRuntimeConfigSpec(t *testing.T, profile string) string {
+	t.Helper()
+	specPath := filepath.Join(t.TempDir(), "runtime-spec.yaml")
+	specContents := []byte(`version: 1
+kind: Config
+campaign_group:
+  id: "20744842"
+auth:
+  profile: "` + profile + `"
+app:
+  name: Readcap
+  app_id: "123456"
+defaults:
+  currency: EUR
+  devices: [IPHONE]
+campaigns: []
+`)
+	if err := os.WriteFile(specPath, specContents, 0o600); err != nil {
+		t.Fatalf("write runtime spec: %v", err)
 	}
 	return specPath
 }

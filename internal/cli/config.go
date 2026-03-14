@@ -244,7 +244,7 @@ func isTerminalFile(file *os.File) bool {
 	return info.Mode()&os.ModeCharDevice != 0
 }
 
-func maybeBootstrapRuntimeConfig(ctx context.Context, editor configEditor, input spec.Spec, profileOverride string) error {
+func maybeBootstrapRuntimeConfig(input spec.Spec, profileOverride string) error {
 	loaded, err := userconfig.Load()
 	if err != nil {
 		return err
@@ -253,18 +253,10 @@ func maybeBootstrapRuntimeConfig(ctx context.Context, editor configEditor, input
 	selectedProfile := resolvedBootstrapProfile(profileOverride, input.Auth.Profile, loaded.File.DefaultProfile)
 
 	if !loaded.Exists {
-		file := userconfig.NewFile(selectedProfile)
-		file.Profiles[selectedProfile] = userconfig.StarterProfile()
-		if err := userconfig.SavePath(loaded.Path, file); err != nil {
-			return err
-		}
-		opened, openErr := tryOpenConfigEditor(ctx, editor, loaded.Path)
-		return configBootstrapError{
-			path:        loaded.Path,
-			profile:     selectedProfile,
-			created:     true,
-			opened:      opened,
-			editorError: openErr,
+		return runtimeConfigSetupError{
+			path:          loaded.Path,
+			profile:       selectedProfile,
+			missingConfig: true,
 		}
 	}
 
@@ -272,13 +264,10 @@ func maybeBootstrapRuntimeConfig(ctx context.Context, editor configEditor, input
 		return nil
 	}
 
-	opened, openErr := tryOpenConfigEditor(ctx, editor, loaded.Path)
-	return configBootstrapError{
+	return runtimeConfigSetupError{
 		path:           loaded.Path,
 		profile:        selectedProfile,
 		missingProfile: true,
-		opened:         opened,
-		editorError:    openErr,
 	}
 }
 
@@ -291,43 +280,24 @@ func resolvedBootstrapProfile(values ...string) string {
 	return "default"
 }
 
-type configBootstrapError struct {
+type runtimeConfigSetupError struct {
 	path           string
 	profile        string
-	created        bool
+	missingConfig  bool
 	missingProfile bool
-	opened         bool
-	editorError    error
 }
 
-func (e configBootstrapError) Error() string {
-	var message strings.Builder
-	if e.created {
-		fmt.Fprintf(&message, "Created starter config at %s for profile %q.", e.path, e.profile)
-	} else if e.missingProfile {
-		fmt.Fprintf(&message, "Config exists at %s, but profile %q is missing.", e.path, e.profile)
-	} else {
-		fmt.Fprintf(&message, "Config setup is incomplete at %s for profile %q.", e.path, e.profile)
+func (e runtimeConfigSetupError) Error() string {
+	switch {
+	case e.missingConfig && e.profile == "default":
+		return fmt.Sprintf("User config is missing at %s for profile %q. Run 'asactl config init' and then 'asactl config edit', then rerun the command.", e.path, e.profile)
+	case e.missingConfig:
+		return fmt.Sprintf("User config is missing at %s for profile %q. Run 'asactl config init' and then 'asactl config edit'. Add profile %q or change your profile selection, then rerun the command.", e.path, e.profile, e.profile)
+	case e.missingProfile:
+		return fmt.Sprintf("User config exists at %s but profile %q is missing. Run 'asactl config edit', add profile %q or change your profile selection, then rerun the command.", e.path, e.profile, e.profile)
+	default:
+		return fmt.Sprintf("User config setup is incomplete at %s for profile %q. Run 'asactl config edit', then rerun the command.", e.path, e.profile)
 	}
-
-	if e.opened {
-		message.WriteString(" It was opened in your editor.")
-	} else if e.editorError != nil {
-		fmt.Fprintf(&message, " %s.", strings.TrimSpace(e.editorError.Error()))
-	}
-
-	message.WriteString(" Fill client_id, team_id, key_id, and private_key_path, then rerun the command.")
-	return message.String()
-}
-
-func tryOpenConfigEditor(ctx context.Context, editor configEditor, path string) (bool, error) {
-	if editor == nil {
-		return false, errors.New("no editor is configured; set VISUAL or EDITOR, or install nvim, vim, or vi")
-	}
-	if err := editor.Edit(ctx, path); err != nil {
-		return false, err
-	}
-	return true, nil
 }
 
 func editorInvocation(editor, path string) (string, []string, error) {

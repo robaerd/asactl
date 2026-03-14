@@ -410,55 +410,44 @@ func TestEditorInvocationRejectsShellInterpreter(t *testing.T) {
 	}
 }
 
-func TestMaybeBootstrapRuntimeConfigCreatesStarterFileAndOpensEditor(t *testing.T) {
+func TestMaybeBootstrapRuntimeConfigGuidesMissingConfigForDefaultProfile(t *testing.T) {
 	override := filepath.Join(t.TempDir(), "config.toml")
 	t.Setenv(userconfig.OverrideEnvVar, override)
-	t.Setenv("APPLE_ADS_CLIENT_ID", "client-id")
-	t.Setenv("APPLE_ADS_TEAM_ID", "team-id")
-	t.Setenv("APPLE_ADS_KEY_ID", "key-id")
-	t.Setenv("APPLE_ADS_PRIVATE_KEY_PATH", "/tmp/private.pem")
-
-	editor := &fakeEditor{}
-	err := maybeBootstrapRuntimeConfig(context.Background(), editor, spec.Spec{
+	err := maybeBootstrapRuntimeConfig(spec.Spec{
 		Version: 1,
 		Kind:    spec.KindConfig,
 		Auth:    spec.Auth{Profile: "default"},
 		App:     spec.App{Name: "Readcap", AppID: "123456"},
 	}, "")
-	if err == nil || !strings.Contains(err.Error(), "Created starter config") {
-		t.Fatalf("expected bootstrap creation error, got %v", err)
+	if err == nil || !strings.Contains(err.Error(), "User config is missing") {
+		t.Fatalf("expected missing-config guidance, got %v", err)
 	}
-	if editor.path != override {
-		t.Fatalf("expected editor to open %q, got %q", override, editor.path)
+	if !strings.Contains(err.Error(), "Run 'asactl config init' and then 'asactl config edit'") {
+		t.Fatalf("expected config init/edit guidance, got %v", err)
 	}
-	content, readErr := os.ReadFile(override)
-	if readErr != nil {
-		t.Fatalf("read config: %v", readErr)
-	}
-	text := string(content)
-	if !strings.Contains(text, "default_profile = \"default\"") && !strings.Contains(text, "default_profile = 'default'") {
-		t.Fatalf("expected default profile in config, got %s", text)
-	}
-	if !strings.Contains(text, `client_id = "YOUR_APPLE_ADS_CLIENT_ID"`) && !strings.Contains(text, `client_id = 'YOUR_APPLE_ADS_CLIENT_ID'`) {
-		t.Fatalf("expected placeholder client_id in bootstrap config, got %s", text)
+	if _, statErr := os.Stat(override); !errors.Is(statErr, os.ErrNotExist) {
+		t.Fatalf("expected config file to remain missing, stat err=%v", statErr)
 	}
 }
 
-func TestMaybeBootstrapRuntimeConfigCreatesStarterFileWithoutExplicitProfile(t *testing.T) {
+func TestMaybeBootstrapRuntimeConfigGuidesMissingConfigForNamedProfile(t *testing.T) {
 	override := filepath.Join(t.TempDir(), "config.toml")
 	t.Setenv(userconfig.OverrideEnvVar, override)
 
-	err := maybeBootstrapRuntimeConfig(context.Background(), &fakeEditor{}, spec.Spec{
-		Version:       1,
-		Kind:          spec.KindConfig,
-		CampaignGroup: spec.CampaignGroup{ID: "20744842"},
-		App:           spec.App{Name: "Readcap", AppID: "123456"},
+	err := maybeBootstrapRuntimeConfig(spec.Spec{
+		Version: 1,
+		Kind:    spec.KindConfig,
+		Auth:    spec.Auth{Profile: "prod"},
+		App:     spec.App{Name: "Readcap", AppID: "123456"},
 	}, "")
-	if err == nil || !strings.Contains(err.Error(), "Created starter config") {
-		t.Fatalf("expected bootstrap creation guidance, got %v", err)
+	if err == nil || !strings.Contains(err.Error(), `profile "prod"`) {
+		t.Fatalf("expected named-profile guidance, got %v", err)
 	}
-	if _, statErr := os.Stat(override); statErr != nil {
-		t.Fatalf("expected config file creation, stat err=%v", statErr)
+	if !strings.Contains(err.Error(), `Add profile "prod" or change your profile selection`) {
+		t.Fatalf("expected add-profile guidance, got %v", err)
+	}
+	if _, statErr := os.Stat(override); !errors.Is(statErr, os.ErrNotExist) {
+		t.Fatalf("expected config file to remain missing, stat err=%v", statErr)
 	}
 }
 
@@ -478,8 +467,7 @@ private_key_path = "/tmp/private.pem"
 		t.Fatalf("write config: %v", err)
 	}
 
-	editor := &fakeEditor{}
-	err := maybeBootstrapRuntimeConfig(context.Background(), editor, spec.Spec{
+	err := maybeBootstrapRuntimeConfig(spec.Spec{
 		Version: 1,
 		Kind:    spec.KindConfig,
 		Auth:    spec.Auth{Profile: "prod"},
@@ -488,8 +476,38 @@ private_key_path = "/tmp/private.pem"
 	if err == nil || !strings.Contains(err.Error(), "profile \"prod\" is missing") {
 		t.Fatalf("expected missing profile guidance, got %v", err)
 	}
-	if editor.path != override {
-		t.Fatalf("expected editor to open %q, got %q", override, editor.path)
+	if !strings.Contains(err.Error(), "Run 'asactl config edit'") {
+		t.Fatalf("expected config edit guidance, got %v", err)
+	}
+	if !strings.Contains(err.Error(), `add profile "prod" or change your profile selection`) {
+		t.Fatalf("expected add-profile guidance, got %v", err)
+	}
+}
+
+func TestMaybeBootstrapRuntimeConfigUsesProfileOverridePrecedence(t *testing.T) {
+	override := filepath.Join(t.TempDir(), "config.toml")
+	t.Setenv(userconfig.OverrideEnvVar, override)
+	if err := os.WriteFile(override, []byte(`
+version = 1
+default_profile = "default"
+
+[profiles.default]
+client_id = "client-id"
+team_id = "team-id"
+key_id = "key-id"
+private_key_path = "/tmp/private.pem"
+`), 0o600); err != nil {
+		t.Fatalf("write config: %v", err)
+	}
+
+	err := maybeBootstrapRuntimeConfig(spec.Spec{
+		Version: 1,
+		Kind:    spec.KindConfig,
+		Auth:    spec.Auth{Profile: "prod"},
+		App:     spec.App{Name: "Readcap", AppID: "123456"},
+	}, "ops")
+	if err == nil || !strings.Contains(err.Error(), `profile "ops" is missing`) {
+		t.Fatalf("expected override profile guidance, got %v", err)
 	}
 }
 

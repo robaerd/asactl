@@ -163,9 +163,9 @@ Contains: `generators`, `campaigns`.
 
 ## Auth Configuration
 
-### First-run bootstrap
+### Manual setup
 
-If the config file is missing, `check-auth`, `plan`, and `apply` will create a starter config and open it in your editor. You can also run this yourself:
+Set up auth by running:
 
 ```bash
 asactl config init
